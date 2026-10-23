@@ -1,0 +1,70 @@
+name: CI (Website)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/web/**"
+      - "biome.json"
+      - "mise.toml"
+      - ".github/workflows/ci-web.yml"
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "biome.json"
+      - "mise.toml"
+      - ".github/workflows/ci-web.yml"
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v5
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: mise run web:lint
+
+      - name: Typecheck
+        run: mise run web:typecheck
+
+      - name: Build
+        run: mise run web:build
+
+  deploy:
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: deploy-web
+      cancel-in-progress: false
+    env:
+      GOOGLE_ANALYTICS_MEASUREMENT_ID: ${{ vars.GOOGLE_ANALYTICS_MEASUREMENT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v5
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: pnpm install --frozen-lockfile
+
+      - name: Check environment variables
+        run: |
+          if [ -z "$GOOGLE_ANALYTICS_MEASUREMENT_ID" ]; then
+            echo "::error::GOOGLE_ANALYTICS_MEASUREMENT_ID is not set in the production environment"
+            exit 1
+          fi
+
+      - name: Deploy
+        run: mise run web:deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

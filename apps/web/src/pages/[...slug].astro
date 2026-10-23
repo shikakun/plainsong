@@ -1,0 +1,56 @@
+---
+import { getCollection, render } from 'astro:content';
+import DocumentLayout from '@/layouts/DocumentLayout.astro';
+import LandingLayout from '@/layouts/LandingLayout.astro';
+import { alternatePageId, parsePageId } from '@/lib/i18n';
+import type { Locale } from '@/lib/site';
+
+export async function getStaticPaths() {
+  const pages = await getCollection('pages');
+  const ids = new Set(pages.map((page) => page.id));
+
+  return pages.map((page) => {
+    const { locale, slug } = parsePageId(page.id);
+    const segments: string[] = [];
+    if (locale === 'en') {
+      segments.push('en');
+    }
+    if (slug) {
+      segments.push(slug);
+    }
+
+    const hasAlternate = ids.has(alternatePageId(locale, slug));
+
+    return {
+      params: { slug: segments.length > 0 ? segments.join('/') : undefined },
+      props: {
+        page,
+        locale,
+        pageSlug: slug,
+        hasAlternate,
+      },
+    };
+  });
+}
+
+interface Props {
+  page: Awaited<ReturnType<typeof getCollection<'pages'>>>[number];
+  locale: Locale;
+  pageSlug: string;
+  hasAlternate: boolean;
+}
+
+const { page, locale, pageSlug, hasAlternate } = Astro.props;
+const { Content } = await render(page);
+const Layout = pageSlug === '' ? LandingLayout : DocumentLayout;
+---
+
+<Layout
+  locale={locale}
+  slug={pageSlug}
+  title={page.data.title}
+  description={page.data.description}
+  hasAlternate={hasAlternate}
+>
+  <Content />
+</Layout>

@@ -1,0 +1,163 @@
+---
+import { ArrowRight, ExternalLink } from 'lucide-react';
+import badgeEn from '@/assets/badges/mac-app-store-en.svg';
+import badgeJa from '@/assets/badges/mac-app-store-ja.svg';
+import AppDemo from '@/components/AppDemo.astro';
+import HeroSurface from '@/components/HeroSurface.astro';
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { pagePath } from '@/lib/i18n';
+import { landingContent } from '@/lib/landing';
+import { type Locale, macAppStoreUrl, navLabels, SITE_NAME, SOURCE_CODE_URL } from '@/lib/site';
+import { APP_ID, appNode } from '@/lib/structured-data';
+
+interface Props {
+  locale: Locale;
+  slug: string;
+  title: string;
+  description: string;
+  hasAlternate: boolean;
+}
+
+const { locale, slug, title, description, hasAlternate } = Astro.props;
+const content = landingContent[locale];
+const newTabLabel = locale === 'ja' ? '新しいタブで開きます' : 'Opens in a new tab';
+const badge = locale === 'ja' ? badgeJa : badgeEn;
+/**
+ * Appleのアイコンの角の形。半径と制御点の値は次から取った
+ * https://developer.apple.com/forums/thread/670578
+ * https://www.paintcodeapp.com/news/code-for-ios-7-rounded-rectangles
+ */
+const iconMask = (() => {
+  const size = 100;
+  const radius = size * 0.225;
+  const run = 1.52866483;
+  const corner: readonly (readonly [command: 'L' | 'C', values: readonly number[]])[] = [
+    ['L', [0, run]],
+    ['C', [0, 1.08849299, 0, 0.86840701, 0.074911, 0.63149399]],
+    ['C', [0.16906001, 0.37282401, 0.37282401, 0.16906001, 0.63149399, 0.074911]],
+    ['C', [0.86840701, 0, 1.08849299, 0, run, 0]],
+  ];
+  const rotate = (x: number, y: number, times: number) => {
+    let point = [x, y];
+    for (let i = 0; i < times; i++) {
+      point = [size - point[1], point[0]];
+    }
+    return point;
+  };
+  const commands = [0, 1, 2, 3].flatMap((times) =>
+    corner.map(([command, values]) => {
+      const points: string[] = [];
+      for (let i = 0; i < values.length; i += 2) {
+        const [x, y] = rotate(values[i] * radius, values[i + 1] * radius, times);
+        points.push(`${x.toFixed(3)} ${y.toFixed(3)}`);
+      }
+      return `${command}${points.join(' ')}`;
+    }),
+  );
+  const path = `M${commands.join('').slice(1)}Z`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}"><path d="${path}"/></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+})();
+const appLd = appNode(locale, description);
+---
+
+<BaseLayout
+  locale={locale}
+  slug={slug}
+  title={title}
+  description={description}
+  hasAlternate={hasAlternate}
+  tagline={content.tagline}
+  fullBleed
+  headerVariant="plain"
+  mainEntityId={APP_ID}
+  jsonLd={[appLd]}
+>
+  <HeroSurface>
+    <div
+      class="mx-auto -mt-14 flex min-h-svh w-full max-w-5xl flex-col px-4 before:min-h-20 before:flex-1 after:min-h-32 after:flex-1 sm:px-6 sm:after:min-h-40"
+    >
+      <AppDemo locale={locale} />
+    </div>
+    <div class="px-4 pb-8 text-center sm:px-6 sm:pb-12">
+      <span
+        class="mx-auto mb-4 block size-26 [filter:drop-shadow(0_0_0.5px_rgb(0_0_0/0.3))_drop-shadow(0_2px_6px_rgb(19_51_59/0.08))_drop-shadow(0_12px_28px_rgb(19_51_59/0.12))] sm:mb-5 sm:size-32"
+      >
+        <img
+          src="/icon.svg"
+          width="128"
+          height="128"
+          alt=""
+          class="block size-full"
+          style={`mask: ${iconMask} center / 100% 100% no-repeat`}
+        />
+      </span>
+      <p class="mb-8 font-heading text-2xl font-semibold tracking-tight sm:mb-10 sm:text-[1.75rem]">
+        {SITE_NAME}
+      </p>
+      <a
+        href={macAppStoreUrl(locale)}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-block rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+      >
+        <img
+          src={badge.src}
+          width={badge.width}
+          height={badge.height}
+          alt={content.download.label}
+          class="block h-12 w-auto sm:h-14"
+        />
+        <span class="sr-only">{newTabLabel}</span>
+      </a>
+      <p class="mt-5 text-sm text-muted-foreground">
+        <a
+          href={SOURCE_CODE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-1 underline decoration-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:decoration-foreground"
+        >
+          {navLabels[locale].sourceCode}
+          <ExternalLink className="size-3.5 opacity-70" aria-hidden="true" />
+          <span class="sr-only">{newTabLabel}</span>
+        </a>
+      </p>
+    </div>
+  </HeroSurface>
+
+  <div class="mx-auto w-full max-w-5xl px-4 py-16 sm:px-6 sm:py-20">
+    <ul class="grid gap-x-10 gap-y-12 sm:grid-cols-2">
+      {
+        content.features.map((feature) => (
+          <li class="min-w-0">
+            <img
+              src={feature.image.src}
+              width={feature.image.width}
+              height={feature.image.height}
+              alt={feature.alt}
+              loading="lazy"
+              decoding="async"
+              class="w-full rounded-xl border border-border"
+            />
+            <h2 class="mt-5 font-heading text-lg font-semibold tracking-tight sm:text-xl">
+              {feature.title}
+            </h2>
+            <p class="mt-2 leading-7">{feature.body}</p>
+            {feature.link && (
+              <p class="mt-3">
+                <a
+                  href={pagePath(locale, feature.link.slug)}
+                  data-nav-slug={feature.link.slug}
+                  class="inline-flex items-center gap-1 text-sm font-medium underline decoration-muted-foreground underline-offset-4 transition-colors hover:decoration-foreground"
+                >
+                  {feature.link.label}
+                  <ArrowRight className="size-3.5" aria-hidden="true" />
+                </a>
+              </p>
+            )}
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</BaseLayout>

@@ -1,0 +1,28 @@
+---
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+---
+
+<div class:list={['hero-surface -mt-14 pt-14', className]}>
+  <div class="hero-surface__probe" data-header-probe aria-hidden="true"></div>
+  <slot />
+</div>
+
+<style>
+  .hero-surface {
+    position: relative;
+    background-color: var(--hero);
+  }
+
+  .hero-surface__probe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+  }
+</style>

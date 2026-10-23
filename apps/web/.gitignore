@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.astro/
+.pnpm-store/
+.env
+.env.local
+.env.*.local
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log

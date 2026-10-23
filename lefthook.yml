@@ -1,0 +1,10 @@
+pre-commit:
+  commands:
+    swiftformat:
+      root: "apps/macos/"
+      glob: "*.swift"
+      run: mise exec -- swiftformat --lint {staged_files}
+    swiftlint:
+      root: "apps/macos/"
+      glob: "*.swift"
+      run: mise exec -- swiftlint lint --strict {staged_files}

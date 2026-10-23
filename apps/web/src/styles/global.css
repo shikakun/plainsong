@@ -1,0 +1,406 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: var(--typography-font-family-default);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --color-hero: var(--hero);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --typography-font-family-default:
+    -apple-system, BlinkMacSystemFont, "Helvetica Neue", "ヒラギノ角ゴ ProN",
+    "Hiragino Kaku Gothic ProN", Arial, メイリオ, Meiryo, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol";
+  --ink: oklch(0.3 0.04 218.73);
+  --hero: oklch(1 0 0);
+  --background: oklch(1 0 0);
+  --foreground: var(--ink);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--ink);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--ink);
+  --primary: oklch(0.4485 0.081 218.73);
+  --primary-hover: oklch(0.38 0.0686 218.73);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.96 0 0);
+  --secondary-foreground: var(--ink);
+  --muted: oklch(0.96 0 0);
+  --muted-foreground: oklch(0.45 0.04 218.73);
+  --accent: oklch(0.96 0 0);
+  --accent-foreground: var(--ink);
+  --destructive: oklch(0.45 0 0);
+  --border: oklch(0.9 0 0);
+  --input: oklch(0.9 0 0);
+  --ring: oklch(0.55 0 0);
+  --radius: 0.5rem;
+}
+
+@layer base {
+  /**
+   * Material Honesty（素材に対して正直）
+   *
+   * 物事をデザインするにあたって、その素材の性質やありように逆らわず、活かしてデザインする。環境に柔軟に適応する。
+   * 転じて、ユーザーエージェントで指定されている挙動や、見た目の指定を尊重する。
+   * とはいえ、まぁこうしたほうが美しいよね、便利だよねってものは、意思を持って変更しています。
+   *
+   * Tailwindのユーティリティに上書きされる側でいてほしいので`@layer base`に置く。
+   * レイヤー無しで書くとユーティリティより強くなり、`text-muted-foreground`などが効かなくなる。
+   */
+
+  :root {
+    /* デフォルトのフォントを指定 */
+    font-family: var(--typography-font-family-default);
+
+    /* 約物が連続する場合のアキを詰め、行頭の余白も除去 */
+    text-spacing-trim: trim-start;
+
+    /* 和欧間に自動でスペースを挿入 */
+    text-autospace: normal;
+
+    /* 禁則処理 */
+    line-break: strict;
+    hanging-punctuation: allow-end;
+
+    /* 英単語の途中でも折り返す */
+    overflow-wrap: anywhere;
+
+    /* テキストと下線の距離をすこし空ける */
+    text-underline-offset: 0.1em;
+
+    /* モバイルデバイスでディスプレイを回転させた場合に、意図せずテキストが拡大される挙動を防ぐ */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+
+    /* スクロールバーの表示・非表示によるレイアウトシフトを防止 */
+    scrollbar-gutter: stable;
+
+    /* iOSでタップした場合にハイライトしない */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :lang(ja) {
+    /* 和文はカーニングしない */
+    font-kerning: none;
+  }
+
+  :lang(en) {
+    /* 欧文で最終行に1単語だけが残る、いわゆるorphanと呼ばれる現象を防ぐ */
+    text-wrap: pretty;
+  }
+
+  ::placeholder {
+    /* プレースホルダーのテキストの不透明度を正規化 */
+    opacity: unset;
+  }
+
+  body {
+    /* ユーザーエージェントスタイルの指定を無効化 */
+    margin: unset;
+
+    /* フッターを固定する場合などを想定し、最小の高さを指定 */
+    min-block-size: 100dvb;
+  }
+
+  ul,
+  ol,
+  menu {
+    /* デフォルトのリストのマーカーを空文字で隠し、余白も詰める */
+    list-style-type: "";
+    padding: unset;
+  }
+
+  pre {
+    /* :rootの指定が継承して意図せず表示の崩れを引き起こさないように打ち消す */
+    text-spacing-trim: space-all;
+    text-autospace: no-autospace;
+  }
+
+  em:lang(ja) {
+    /* 和文では強調を斜体ではなく太字で表現する */
+    font-style: unset;
+    font-weight: bolder;
+  }
+
+  code,
+  kbd,
+  samp {
+    /* ユーザーエージェントスタイルの指定を無効化 */
+    font-size: unset;
+
+    /* 等幅フォントで表示するためリガチャの表示を無効化 */
+    font-variant-ligatures: none;
+
+    /* フォントの機能の指定が継承し、意図せず等幅フォントの表示の崩れを引き起こさないように打ち消す */
+    font-feature-settings: initial;
+    font-variation-settings: initial;
+  }
+
+  abbr[title] {
+    /* abbr要素の見た目をブラウザ間で統一 */
+    text-decoration-line: underline;
+    text-decoration-style: dotted;
+    cursor: help;
+  }
+
+  time {
+    /* :rootの指定が継承して意図せず表示の崩れを引き起こさないように打ち消す */
+    /* 日付の表記には和欧間に自動でスペースを挿入しない */
+    text-autospace: no-autospace;
+  }
+
+  a {
+    /* ユーザーエージェントスタイルの指定を無効化 */
+    color: unset;
+  }
+
+  img,
+  svg,
+  picture,
+  video,
+  audio,
+  canvas,
+  model,
+  iframe,
+  embed,
+  object {
+    /* 最大幅を親要素の幅に制限 */
+    max-inline-size: 100%;
+
+    /* インライン要素として配置された場合に下部に余白が空かないようにする */
+    vertical-align: bottom;
+  }
+
+  img,
+  svg,
+  picture,
+  video,
+  canvas,
+  model,
+  iframe,
+  embed,
+  object {
+    /* コンテンツに応じて垂直方向のサイズを自動で調整 */
+    block-size: auto;
+  }
+
+  iframe {
+    /* ユーザーエージェントスタイルの指定を無効化 */
+    border: unset;
+  }
+
+  table {
+    /* テーブルのセルの境界線はデフォルトで結合 */
+    border-collapse: collapse;
+  }
+
+  search {
+    /* search要素がSafari 17未満など未対応の環境でインライン要素として表示されるのを防ぐ */
+    display: block flow;
+  }
+
+  input[type="search" i] {
+    /* macOSにて角丸や背景色をつけない */
+    -webkit-appearance: textfield;
+  }
+
+  @supports (-webkit-touch-callout: none) {
+    :where(input[type="search" i]) {
+      /* iOSで背景色を正規化 */
+      background-color: Canvas;
+    }
+  }
+
+  textarea {
+    /* ユーザーエージェントスタイルの指定を無効化 */
+    margin-block: unset;
+  }
+
+  input:not([type="button" i], [type="submit" i], [type="reset" i]),
+  textarea,
+  [contenteditable] {
+    /* :rootの指定が継承して意図せず表示の崩れを引き起こさないように打ち消す */
+    /* 入力中に予期しない挙動を引き起こす可能性があるため和欧間にスペースを挿入しない */
+    text-autospace: no-autospace;
+  }
+
+  button,
+  input:is([type="button" i], [type="submit" i], [type="reset" i]),
+  [role="tab" i],
+  [role="button" i],
+  [role="option" i],
+  ::file-selector-button {
+    /* iOSでボタンをダブルタップするとズームが発生する挙動を無効化 */
+    touch-action: manipulation;
+  }
+
+  fieldset {
+    /* デフォルトの `min-inline-size: min-content` により子要素が引き伸ばすのを防ぐ */
+    min-inline-size: 0;
+  }
+
+  dialog,
+  [popover] {
+    /* 位置を固定した要素をスクロールする場合に、背面のページへのスクロールの伝播やモバイルでのバウンス効果を抑制 */
+    overscroll-behavior-block: contain;
+  }
+
+  dialog:not([open], [popover]),
+  [popover]:not(:popover-open) {
+    /* 閉じているダイアログやポップオーバーが意図せず表示されないようにする */
+    /* biome-ignore lint: !importantを意図して使用しているため */
+    display: none !important;
+  }
+
+  dialog {
+    /* ユーザーエージェントスタイルの指定を無効化 */
+    max-inline-size: unset;
+    max-block-size: unset;
+  }
+
+  dialog::backdrop {
+    /* `::backdrop` の背景色を正規化 */
+    background-color: rgba(0, 0, 0, 0.5);
+    /* biome-ignore lint: oklchに非対応の環境へのフォールバックのため */
+    background-color: oklch(0% 0 0deg / 50%);
+  }
+
+  @media (forced-colors: active) {
+    /*
+     * ハイコントラストモードでは box-shadow と text-shadow が none に強制されるため、
+     * Tailwindの ring-* のように box-shadow で描いたフォーカスリングは消えてしまう。
+     * outline-color はシステムの配色へ置き換えられて残るので、保険としてすべての要素に敷いておく。
+     * Highlight などのシステム色を明示した場合は、その色がそのまま使われる
+     */
+    :focus-visible {
+      outline: 2px solid Highlight;
+      outline-offset: 2px;
+    }
+  }
+
+  * {
+    @apply border-border outline-ring;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  :where(h1, h2, h3, h4, h5, h6),
+  .wrap-phrase {
+    word-break: auto-phrase;
+  }
+
+  :where(h1, h2, h3, h4, h5, h6):lang(en),
+  .wrap-phrase:lang(en) {
+    text-wrap: balance;
+  }
+
+  .prose-doc,
+  .home-prose {
+    @apply text-base leading-7 text-foreground sm:text-[1.05rem] sm:leading-8;
+  }
+
+  .prose-doc :where(h2) {
+    @apply mt-10 scroll-mt-24 font-heading text-xl font-semibold tracking-tight text-foreground first:mt-0 sm:text-2xl;
+  }
+
+  .prose-doc :where(h3) {
+    @apply mt-8 scroll-mt-24 font-heading text-lg font-semibold tracking-tight text-foreground;
+  }
+
+  .prose-doc :where(p),
+  .home-prose :where(p) {
+    @apply my-4;
+  }
+
+  .prose-doc :where(ul, ol) {
+    @apply my-4 list-outside space-y-2 pl-5;
+  }
+
+  .prose-doc :where(ul) {
+    @apply list-disc;
+  }
+
+  .prose-doc :where(ol) {
+    @apply list-decimal;
+  }
+
+  .prose-doc :where(li) {
+    @apply pl-1;
+  }
+
+  .home-prose :where(br) {
+    @apply hidden sm:inline;
+  }
+
+  .prose-doc :where(a),
+  .home-prose :where(a) {
+    @apply font-medium text-foreground underline decoration-muted-foreground underline-offset-4 transition-colors hover:decoration-foreground;
+  }
+
+  .prose-doc :where(strong) {
+    @apply font-semibold text-foreground;
+  }
+
+  .prose-doc :where(hr) {
+    @apply my-8 border-border;
+  }
+
+  .prose-doc :where(blockquote) {
+    @apply my-6 border-l-2 border-muted-foreground pl-4 text-muted-foreground;
+  }
+
+  .prose-doc :where(:not(pre) > code) {
+    @apply rounded-md bg-muted px-1.5 py-0.5 font-mono text-[0.875em] break-all text-foreground;
+  }
+
+  .prose-doc :where(pre) {
+    @apply my-6 max-w-full overflow-x-auto rounded-xl border border-border p-4 text-sm;
+  }
+
+  .prose-doc :where(pre code) {
+    @apply break-normal bg-transparent p-0 text-[length:inherit] text-inherit;
+  }
+
+  .prose-doc :where(table) {
+    @apply my-6 block w-full max-w-full border-collapse overflow-x-auto text-sm;
+  }
+
+  .prose-doc :where(th) {
+    @apply whitespace-nowrap border-b border-border bg-muted/50 px-3 py-2 text-left font-semibold text-foreground;
+  }
+
+  .prose-doc :where(td) {
+    @apply border-b border-border/70 px-3 py-2 align-top;
+  }
+}

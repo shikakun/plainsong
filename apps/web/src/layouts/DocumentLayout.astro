@@ -1,0 +1,41 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import type { Locale } from '@/lib/site';
+import { documentPageType } from '@/lib/structured-data';
+
+interface Props {
+  locale: Locale;
+  slug: string;
+  title: string;
+  description: string;
+  hasAlternate: boolean;
+}
+
+const { locale, slug, title, description, hasAlternate } = Astro.props;
+const isHome = slug === '';
+---
+
+<BaseLayout
+  locale={locale}
+  slug={slug}
+  title={title}
+  description={description}
+  hasAlternate={hasAlternate}
+  webPageType={documentPageType(slug)}
+>
+  <article class:list={[isHome ? 'home-prose' : 'prose-doc', 'min-w-0']}>
+    <h1
+      class:list={[
+        'font-heading tracking-tight text-foreground',
+        isHome
+          ? 'text-4xl font-semibold sm:text-5xl'
+          : 'text-[clamp(1.5rem,8vw,1.875rem)] font-semibold sm:text-4xl',
+      ]}
+    >
+      {title}
+    </h1>
+    <div class="mt-6 sm:mt-8">
+      <slot />
+    </div>
+  </article>
+</BaseLayout>

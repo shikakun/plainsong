@@ -1,0 +1,5 @@
+project: plainsong.xcodeproj
+schemes:
+  - plainsong
+retain_public: false
+retain_objc_accessible: true

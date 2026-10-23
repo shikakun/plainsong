@@ -1,0 +1,39 @@
+---
+import BaseLayout from '@/layouts/BaseLayout.astro';
+import { pagePath } from '@/lib/i18n';
+import { navLabels } from '@/lib/site';
+
+const ja = navLabels.ja;
+const en = navLabels.en;
+---
+
+<BaseLayout
+  locale="ja"
+  slug="404"
+  title="ページが見つかりません"
+  description="お探しのページは、移動または削除された可能性があります。"
+  hasAlternate={false}
+  unlisted
+>
+  <div class="prose-doc min-w-0">
+    <h1 class="font-heading text-[clamp(1.5rem,8vw,1.875rem)] font-semibold tracking-tight sm:text-4xl">
+      ページが見つかりません
+    </h1>
+    <p class="mt-6">お探しのページは、移動または削除された可能性があります。次のページからお探しください。</p>
+    <ul>
+      <li><a href={pagePath('ja', '')}>{ja.home}</a></li>
+      <li><a href={pagePath('ja', 'contact')}>{ja.contact}</a></li>
+    </ul>
+
+    <div lang="en">
+      <p class="mt-10">
+        <strong>Page not found.</strong> The page you were looking for may have moved or been
+        removed. Try one of these instead.
+      </p>
+      <ul>
+        <li><a href={pagePath('en', '')}>{en.home}</a></li>
+        <li><a href={pagePath('en', 'contact')}>{en.contact}</a></li>
+      </ul>
+    </div>
+  </div>
+</BaseLayout>

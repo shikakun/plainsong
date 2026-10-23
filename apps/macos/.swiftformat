@@ -1,0 +1,7 @@
+--language-mode 6
+--swiftversion 6.0
+--exclude build
+--enable noGuardInTests
+--enable testSuiteAccessControl
+--enable validateTestCases
+--disable redundantSwiftTestingSuite

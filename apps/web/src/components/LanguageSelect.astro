@@ -1,0 +1,27 @@
+---
+import { LanguageSelect } from '@/components/LanguageSelect';
+import type { Locale } from '@/lib/site';
+import { localeLabels, locales } from '@/lib/site';
+
+interface Props {
+  locale: Locale;
+  slug: string;
+  hasAlternate: boolean;
+}
+
+const { locale, slug, hasAlternate } = Astro.props;
+const label = locale === 'ja' ? '言語' : 'Language';
+const options = locales.map((code) => ({
+  value: code,
+  label: localeLabels[code],
+}));
+---
+
+<LanguageSelect
+  client:load
+  locale={locale}
+  slug={slug}
+  hasAlternate={hasAlternate}
+  label={label}
+  options={options}
+/>

@@ -1,0 +1,14 @@
+---
+import { SITE_NAME } from '@/lib/site';
+
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+---
+
+<span class:list={['flex items-center gap-2', className]}>
+  <img src="/icon.svg" width="24" height="24" alt="" class="block size-6 rounded-md" />
+  <span class="font-heading text-lg font-semibold tracking-tight text-foreground">{SITE_NAME}</span>
+</span>

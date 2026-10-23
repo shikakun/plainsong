@@ -1,0 +1,174 @@
+---
+import { ExternalLink } from 'lucide-react';
+import Logo from '@/components/Logo.astro';
+import { MobileNav } from '@/components/MobileNav';
+import { pagePath } from '@/lib/i18n';
+import {
+  footerNavItems,
+  headerNavExternalHref,
+  headerNavItems,
+  isCurrentNavSlug,
+  type Locale,
+  navLabels,
+  SITE_NAME,
+} from '@/lib/site';
+import { cn } from '@/lib/utils';
+
+interface Props {
+  locale: Locale;
+  slug: string;
+  variant?: 'default' | 'plain';
+}
+
+const { locale, slug, variant = 'default' } = Astro.props;
+const plain = variant === 'plain';
+const highlightCurrent = slug !== '';
+const labels = navLabels[locale];
+const homeHref = pagePath(locale, '');
+const navLabel = locale === 'ja' ? 'サイト内ナビ' : 'Site';
+const legalNavLabel = locale === 'ja' ? '法務情報' : 'Legal';
+const openLabel = locale === 'ja' ? 'メニューを開く' : 'Open menu';
+const newTabLabel = locale === 'ja' ? '新しいタブで開きます' : 'Opens in a new tab';
+const navItems = headerNavItems.map((item) => {
+  if (item.kind === 'external') {
+    return {
+      href: headerNavExternalHref(item, locale),
+      slug: item.id,
+      label: labels[item.labelKey],
+      current: false,
+      external: true,
+      drawerOnly: false,
+    };
+  }
+  return {
+    href: pagePath(locale, item.slug),
+    slug: item.slug,
+    label: labels[item.labelKey],
+    current: isCurrentNavSlug(item.slug, slug),
+    external: false,
+    drawerOnly: item.drawerOnly ?? false,
+  };
+});
+const headerItems = navItems.filter((item) => !item.drawerOnly);
+const mobileLegalItems = footerNavItems.map((item) => ({
+  href: pagePath(locale, item.slug),
+  slug: item.slug,
+  label: labels[item.labelKey],
+  current: slug === item.slug,
+  external: false,
+}));
+---
+
+<header
+  class:list={['sticky top-0 z-40', plain ? 'site-header--plain' : 'bg-background']}
+  data-site-header={plain ? 'plain' : undefined}
+>
+  <div class="mx-auto w-full max-w-5xl px-4 sm:px-6">
+    <div
+      class:list={[
+        'site-header__bar flex h-14 items-center gap-4 border-b',
+        plain ? '' : 'border-border',
+      ]}
+    >
+      <a
+        href={homeHref}
+        data-nav-slug=""
+        class="inline-flex shrink-0 items-center transition-opacity hover:opacity-80"
+      >
+        <Logo />
+      </a>
+      <div class="ml-auto flex items-center gap-2">
+        <nav aria-label={navLabel} class="hidden md:block">
+          <ul class="flex items-center gap-1">
+            {
+              headerItems.map((item) => {
+                if (item.external) {
+                  return (
+                    <li>
+                      <a
+                        href={item.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex h-8 items-center gap-1 rounded-lg px-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                      >
+                        {item.label}
+                        <ExternalLink className="size-3.5 opacity-70" aria-hidden="true" />
+                        <span class="sr-only">{newTabLabel}</span>
+                      </a>
+                    </li>
+                  );
+                }
+
+                return (
+                  <li>
+                    <a
+                      href={item.href}
+                      data-nav-slug={item.slug}
+                      aria-current={item.current ? 'page' : undefined}
+                      class={cn(
+                        'inline-flex h-8 items-center rounded-lg px-2.5 text-sm font-medium transition-colors',
+                        item.current && highlightCurrent
+                          ? 'bg-muted text-foreground'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                      )}
+                    >
+                      {item.label}
+                    </a>
+                  </li>
+                );
+              })
+            }
+          </ul>
+        </nav>
+        <MobileNav
+          client:load
+          title={SITE_NAME}
+          homeHref={homeHref}
+          navLabel={navLabel}
+          legalNavLabel={legalNavLabel}
+          openLabel={openLabel}
+          newTabLabel={newTabLabel}
+          items={navItems}
+          legalItems={mobileLegalItems}
+        />
+      </div>
+    </div>
+  </div>
+</header>
+
+<script>
+  const header = document.querySelector<HTMLElement>('[data-site-header="plain"]');
+  const probe = document.querySelector('[data-header-probe]');
+
+  if (header && probe) {
+    new IntersectionObserver(([entry]) => {
+      header.toggleAttribute('data-stuck', !entry.isIntersecting);
+    }).observe(probe);
+  }
+</script>
+
+<style>
+  .site-header--plain {
+    transition: background-color 200ms ease;
+  }
+
+  .site-header--plain[data-stuck] {
+    background-color: var(--background);
+  }
+
+  .site-header--plain .site-header__bar {
+    border-color: transparent;
+    transition: border-color 200ms ease;
+  }
+
+  .site-header--plain[data-stuck] .site-header__bar {
+    border-color: var(--border);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .site-header--plain,
+    .site-header--plain .site-header__bar {
+      transition: none;
+    }
+  }
+</style>

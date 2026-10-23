@@ -1,0 +1,201 @@
+---
+import { GOOGLE_ANALYTICS_MEASUREMENT_ID } from 'astro:env/client';
+import ogImage from '@/assets/og.jpg';
+import SiteFooter from '@/components/SiteFooter.astro';
+import SiteHeader from '@/components/SiteHeader.astro';
+import { htmlLang, ogLocale, pagePath, pageTitle } from '@/lib/i18n';
+import { isNoindexSlug, type Locale, SITE_NAME, SITE_URL } from '@/lib/site';
+import { type JsonLdNode, pageGraph, serializeJsonLd, webPageNode } from '@/lib/structured-data';
+import '@/styles/global.css';
+
+interface Props {
+  locale: Locale;
+  slug: string;
+  title: string;
+  description: string;
+  hasAlternate: boolean;
+  tagline?: string;
+  fullBleed?: boolean;
+  headerVariant?: 'default' | 'plain';
+  unlisted?: boolean;
+  webPageType?: string;
+  mainEntityId?: string;
+  jsonLd?: readonly JsonLdNode[];
+}
+
+const {
+  locale,
+  slug,
+  title,
+  description,
+  hasAlternate,
+  tagline,
+  fullBleed = false,
+  headerVariant = 'default',
+  unlisted = false,
+  webPageType,
+  mainEntityId,
+  jsonLd = [],
+} = Astro.props;
+const lang = htmlLang(locale);
+const analyticsId = import.meta.env.PROD ? GOOGLE_ANALYTICS_MEASUREMENT_ID : null;
+const canonicalPath = pagePath(locale, slug);
+const site = Astro.site ?? new URL(SITE_URL);
+const canonicalUrl = new URL(canonicalPath, site).href;
+const documentTitle = pageTitle(title, slug, tagline);
+const ogImageUrl = new URL(ogImage.src, site).href;
+const ogImageAlt =
+  locale === 'ja'
+    ? 'Plainsongのウィンドウに「文章を書きたくなるテキストエディタ」と書かれた画面'
+    : 'A Plainsong window with the text "A text editor that makes you want to write"';
+const jaPath = pagePath('ja', slug);
+const enPath = pagePath('en', slug);
+const noindex = unlisted || isNoindexSlug(slug);
+const robots = noindex
+  ? 'noindex, follow'
+  : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
+
+const graph = pageGraph(
+  webPageNode({
+    type: webPageType,
+    url: canonicalUrl,
+    name: documentTitle,
+    description,
+    locale,
+    image: ogImageUrl,
+    mainEntityId,
+  }),
+  jsonLd,
+);
+---
+
+<!doctype html>
+<html lang={lang} data-locale={locale}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {
+      analyticsId && (
+        <Fragment>
+          <link rel="preconnect" href="https://www.googletagmanager.com" />
+          <link rel="dns-prefetch" href="https://www.google-analytics.com" />
+        </Fragment>
+      )
+    }
+    <title>{documentTitle}</title>
+    <meta name="description" content={description} />
+    <meta name="robots" content={robots} />
+    <meta name="theme-color" content="#ffffff" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    {!unlisted && <link rel="canonical" href={canonicalUrl} />}
+    {
+      !unlisted && hasAlternate && (
+        <Fragment>
+          <link rel="alternate" hreflang="ja" href={new URL(jaPath, site).href} />
+          <link rel="alternate" hreflang="en" href={new URL(enPath, site).href} />
+          <link rel="alternate" hreflang="x-default" href={new URL(jaPath, site).href} />
+        </Fragment>
+      )
+    }
+    <meta property="og:title" content={documentTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content={ogLocale(locale)} />
+    {hasAlternate && locale === 'ja' && (
+      <meta property="og:locale:alternate" content="en_US" />
+    )}
+    {hasAlternate && locale === 'en' && (
+      <meta property="og:locale:alternate" content="ja_JP" />
+    )}
+    <meta property="og:site_name" content={SITE_NAME} />
+    <meta property="og:image" content={ogImageUrl} />
+    <meta property="og:image:width" content={String(ogImage.width)} />
+    <meta property="og:image:height" content={String(ogImage.height)} />
+    <meta property="og:image:alt" content={ogImageAlt} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={documentTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageUrl} />
+    <meta name="twitter:image:alt" content={ogImageAlt} />
+    <script is:inline type="application/ld+json" set:html={serializeJsonLd(graph)} />
+    <slot name="head" />
+    {
+      analyticsId && (
+        <Fragment>
+          <script
+            is:inline
+            async
+            src={`https://www.googletagmanager.com/gtag/js?id=${analyticsId}`}
+          />
+          <script is:inline define:vars={{ measurementId: analyticsId }}>
+            window.dataLayer = window.dataLayer || [];
+            function gtag() {
+              dataLayer.push(arguments);
+            }
+            gtag('js', new Date());
+            gtag('config', measurementId);
+          </script>
+        </Fragment>
+      )
+    }
+  </head>
+  <body class="flex min-h-dvh flex-col bg-background text-foreground">
+    <SiteHeader locale={locale} slug={slug} variant={headerVariant} />
+    <main
+      class:list={[
+        'w-full min-w-0 flex-1',
+        fullBleed ? '' : 'mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-12',
+      ]}
+    >
+      <slot />
+    </main>
+    <SiteFooter locale={locale} slug={slug} hasAlternate={hasAlternate} />
+    <script>
+      import { pagePath } from '@/lib/i18n';
+      import { LOCALE_STORAGE_KEY, type Locale } from '@/lib/site';
+
+      function pageLocale(): Locale | null {
+        const value = document.documentElement.dataset.locale;
+        if (value === 'ja' || value === 'en') {
+          return value;
+        }
+        return null;
+      }
+
+      function preferredLocale(): Locale | null {
+        const value = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+        if (value === 'ja' || value === 'en') {
+          return value;
+        }
+        return null;
+      }
+
+      function syncPreferredLocaleFromPage() {
+        const locale = pageLocale();
+        if (!locale) {
+          return;
+        }
+        window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+      }
+
+      function applyPreferredLocaleToNavLinks() {
+        const preferred = preferredLocale();
+        if (!preferred) {
+          return;
+        }
+
+        for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-nav-slug]')) {
+          const linkSlug = link.dataset.navSlug ?? '';
+          link.href = pagePath(preferred, linkSlug);
+        }
+      }
+
+      syncPreferredLocaleFromPage();
+      applyPreferredLocaleToNavLinks();
+    </script>
+  </body>
+</html>

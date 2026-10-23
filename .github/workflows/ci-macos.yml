@@ -1,0 +1,45 @@
+name: CI (macOS app)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/macos/**"
+      - "mise.toml"
+      - ".github/workflows/ci-macos.yml"
+  pull_request:
+    paths:
+      - "apps/macos/**"
+      - "mise.toml"
+      - ".github/workflows/ci-macos.yml"
+
+jobs:
+  ci:
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "27.1"
+
+      - uses: jdx/mise-action@v5
+
+      - name: Lint
+        run: mise run macos:lint
+
+      - name: Generate project
+        run: mise run macos:generate
+
+      - name: Build
+        working-directory: apps/macos
+        run: >
+          xcodebuild -scheme plainsong -project plainsong.xcodeproj build
+          -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
+
+      - name: Test
+        working-directory: apps/macos
+        run: >
+          xcodebuild -scheme plainsong -project plainsong.xcodeproj test
+          -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO

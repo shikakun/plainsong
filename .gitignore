@@ -1,0 +1,21 @@
+# パターンにスラッシュを含むため、ルート基準に固定されないよう`**/`を付ける
+**/*.xcodeproj/*
+!**/*.xcodeproj/project.xcworkspace/
+!**/*.xcodeproj/project.xcworkspace/xcshareddata/
+!**/*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+!**/*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+
+DerivedData/
+build/
+*.dSYM/
+*.profraw
+.DS_Store
+*.xcuserstate
+xcuserdata/
+.build/
+Packages/
+.periphery.yml.tmp
+node_modules/
+Local.xcconfig
+.env
+docs/local/

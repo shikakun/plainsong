@@ -1,0 +1,4 @@
+packages:
+  - apps/macos
+
+minimumReleaseAge: 10080

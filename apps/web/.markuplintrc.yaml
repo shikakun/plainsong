@@ -1,0 +1,25 @@
+extends:
+  - markuplint:recommended
+
+parser:
+  \.astro$: "@markuplint/astro-parser"
+
+rules:
+  no-duplicate-attr: true
+  no-nested-top-level-landmark: true
+  require-landmark-label: true
+  require-h1: true
+  no-duplicate-h1: true
+  no-refer-to-non-existent-id: true
+  meta-charset-position: false
+  head-element-order: false
+
+nodeRules:
+  - selector: "script[async]"
+    rules:
+      require-attr: false
+
+overrides:
+  "./src/components/LanguageSelect.astro":
+    rules:
+      no-unclosed-element-at-eof: false

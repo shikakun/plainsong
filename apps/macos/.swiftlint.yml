@@ -1,0 +1,50 @@
+excluded:
+  - DerivedData
+  - build
+  - "*.xcodeproj"
+
+opt_in_rules:
+  - empty_count
+  - empty_string
+
+disabled_rules:
+  - trailing_comma
+
+line_length:
+  warning: 120
+  error: 160
+
+type_body_length:
+  warning: 300
+  error: 400
+
+file_length:
+  warning: 500
+  error: 800
+
+function_body_length:
+  warning: 60
+  error: 100
+
+identifier_name:
+  min_length:
+    warning: 2
+  excluded:
+    - id
+
+custom_rules:
+  no_dispatch_queue:
+    name: "DispatchQueue Usage"
+    regex: 'DispatchQueue\.'
+    message: "DispatchQueue の直接使用は禁止です。Swift Concurrency を使用してください。"
+    severity: error
+  no_observable_object:
+    name: "ObservableObject Usage"
+    regex: 'ObservableObject'
+    message: "ObservableObject は使用しないでください。@Observable を使用してください。"
+    severity: error
+  no_combine_import:
+    name: "Combine Import"
+    regex: 'import Combine'
+    message: "Combine は使用しないでください。"
+    severity: error

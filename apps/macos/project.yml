@@ -1,0 +1,96 @@
+name: plainsong
+
+options:
+  bundleIdPrefix: com.shikakun
+  developmentLanguage: ja
+  deploymentTarget:
+    macOS: "26.0"
+  xcodeVersion: "26.0"
+  generateEmptyDirectories: true
+  createIntermediateGroups: true
+
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Base.xcconfig
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_STRICT_CONCURRENCY_DEFAULT: complete
+    SWIFT_UPCOMING_FEATURE_6_0: YES
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    SWIFT_EMIT_LOC_STRINGS: YES
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_HARDENED_RUNTIME: YES
+    ENABLE_APP_SANDBOX: YES
+    GENERATE_INFOPLIST_FILE: YES
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+
+targets:
+  plainsong:
+    type: application
+    platform: macOS
+    info:
+      path: plainsong/Info.plist
+      properties:
+        CFBundleName: Plainsong
+        CFBundleDisplayName: Plainsong
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.productivity
+        NSHumanReadableCopyright: © 2026 shikakun
+        ITSAppUsesNonExemptEncryption: false
+        NSSupportsSuddenTermination: true
+        # 既定のアプリを奪わないよう、扱いの順位はAlternateにする
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Plain Text
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.plain-text
+            NSDocumentClass: $(PRODUCT_MODULE_NAME).TextDocument
+    sources:
+      - path: plainsong
+        excludes:
+          - "**/.DS_Store"
+          - Resources/Themes
+      # 拡張子のないテーマのファイルを、フォルダごとバンドルに入れる
+      - path: plainsong/Resources/Themes
+        type: folder
+        buildPhase: resources
+    scheme:
+      testTargets:
+        - plainsongTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.shikakun.plainsong
+        PRODUCT_NAME: Plainsong
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: plainsong/plainsong.entitlements
+        knownRegions:
+          - ja
+          - en
+      configs:
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: plainsong/plainsongDebug.entitlements
+          ENABLE_HARDENED_RUNTIME: NO
+
+  plainsongTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: plainsongTests
+    dependencies:
+      - target: plainsong
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.shikakun.plainsongTests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Plainsong.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Plainsong"
+        BUNDLE_LOADER: "$(TEST_HOST)"
