@@ -36,10 +36,10 @@ jobs:
         working-directory: apps/macos
         run: >
           xcodebuild -scheme plainsong -project plainsong.xcodeproj build
-          -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
+          -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO
 
       - name: Test
         working-directory: apps/macos
         run: >
           xcodebuild -scheme plainsong -project plainsong.xcodeproj test
-          -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
+          -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO
