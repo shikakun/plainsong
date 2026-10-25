@@ -259,6 +259,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
             editorWindow.toolbar = toolbar?.toolbar
         }
         toolbar?.kindsIgnoringSelection = settings.toolbarItemsIgnoringSelection
+        toolbar?.findOpensReplace = settings.toolbarFindOpensReplace
         measureTitlebar()
     }
 

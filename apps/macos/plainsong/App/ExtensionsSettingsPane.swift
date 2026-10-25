@@ -110,13 +110,23 @@ private final class ToolbarItemOptionsView: NSStackView {
         self.kind = kind
         self.model = model
         super.init(frame: .zero)
-        let checkbox = NSButton(
-            checkboxWithTitle: kind.selectionOptionTitle ?? "",
-            target: self,
-            action: #selector(change(_:))
-        )
-        checkbox.state = model.settings.toolbarItemsIgnoringSelection.contains(kind) ? .off : .on
-        addArrangedSubview(checkbox)
+        orientation = .vertical
+        alignment = .leading
+        spacing = 6
+        if let title = kind.selectionOptionTitle {
+            let checkbox = NSButton(checkboxWithTitle: title, target: self, action: #selector(changeUsesSelection(_:)))
+            checkbox.state = model.settings.toolbarItemsIgnoringSelection.contains(kind) ? .off : .on
+            addArrangedSubview(checkbox)
+        }
+        if kind == .find {
+            let checkbox = NSButton(
+                checkboxWithTitle: String(localized: "settings.toolbarItem.find.opensReplace"),
+                target: self,
+                action: #selector(changeOpensReplace(_:))
+            )
+            checkbox.state = model.settings.toolbarFindOpensReplace ? .on : .off
+            addArrangedSubview(checkbox)
+        }
     }
 
     @available(*, unavailable)
@@ -124,7 +134,7 @@ private final class ToolbarItemOptionsView: NSStackView {
         preconditionFailure("init(coder:) is not supported")
     }
 
-    @objc private func change(_ sender: NSButton) {
+    @objc private func changeUsesSelection(_ sender: NSButton) {
         model.update { settings in
             if sender.state == .on {
                 settings.toolbarItemsIgnoringSelection.remove(kind)
@@ -132,6 +142,10 @@ private final class ToolbarItemOptionsView: NSStackView {
                 settings.toolbarItemsIgnoringSelection.insert(kind)
             }
         }
+    }
+
+    @objc private func changeOpensReplace(_ sender: NSButton) {
+        model.update { $0.toolbarFindOpensReplace = sender.state == .on }
     }
 }
 

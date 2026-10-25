@@ -1795,6 +1795,38 @@
         }
       }
     },
+    "settings.toolbarItem.find.opensReplace" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Replace"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "置換を開く"
+          }
+        }
+      }
+    },
+    "settings.toolbarItem.find.usesSelection" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When text is selected, search for the selection"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "テキストを選択中は、選択したテキストを検索する"
+          }
+        }
+      }
+    },
     "settings.toolbarItem.share.usesSelection" : {
       "localizations" : {
         "en" : {
@@ -2311,6 +2343,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "入力した内容を削除して空にします"
+          }
+        }
+      }
+    },
+    "toolbarItem.find" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "検索"
+          }
+        }
+      }
+    },
+    "toolbarItem.find.summary" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Searches the text"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "テキストを検索します"
           }
         }
       }

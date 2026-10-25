@@ -4,6 +4,7 @@ final class EditorToolbar: NSObject, NSToolbarDelegate, NSSharingServicePickerTo
     let kinds: [ToolbarItemKind]
     let toolbar = NSToolbar(identifier: "Editor")
     var kindsIgnoringSelection: Set<ToolbarItemKind> = []
+    var findOpensReplace = false
     private weak var textView: NSTextView?
 
     init(kinds: [ToolbarItemKind], textView: NSTextView) {
@@ -43,6 +44,9 @@ final class EditorToolbar: NSObject, NSToolbarDelegate, NSSharingServicePickerTo
             case .copy:
                 item.target = self
                 item.action = #selector(copyText(_:))
+            case .find:
+                item.target = self
+                item.action = #selector(findText(_:))
             case .save:
                 item.action = #selector(NSDocument.save(_:))
             case .delete:
@@ -72,6 +76,18 @@ final class EditorToolbar: NSObject, NSToolbarDelegate, NSSharingServicePickerTo
             textView.copy(nil)
         }
         announce(String(localized: "toolbarItem.copy.done"))
+    }
+
+    @objc private func findText(_: Any?) {
+        guard let textView, let editor = textView.window?.windowController as? EditorWindowController else { return }
+        if !selectedRanges(of: textView, for: .find).isEmpty {
+            editor.useSelectionForFind(nil)
+        }
+        if findOpensReplace {
+            editor.showReplacePanel(nil)
+        } else {
+            editor.showFindPanel(nil)
+        }
     }
 
     /// 全文を消すときも⌘Zで取り消せるよう、キー入力と同じ手順で書き換える
