@@ -54,6 +54,7 @@ struct EditorSettings: Equatable {
     var toolbarItems = ExtensionItem<ToolbarItemKind>.defaults
     /// 選択していても全文を対象にする項目。例外として持つので、あとから増えた項目は、はじめは選択したテキストを対象にする
     var toolbarItemsIgnoringSelection: Set<ToolbarItemKind> = []
+    var toolbarFindOpensReplace = false
     var showsStatusBarSettingsButton = true
     var showsStatusBarOnHover = false
     var statusBarItems = ExtensionItem<StatusBarItemKind>.defaults
@@ -68,14 +69,14 @@ struct EditorSettings: Equatable {
         statusBarItems.filter(\.isEnabled).map(\.kind)
     }
 
-    func paragraphStyle(lineHeight: CGFloat) -> NSParagraphStyle {
+    func paragraphStyle(lineHeight: CGFloat, justifies: Bool) -> NSParagraphStyle {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.minimumLineHeight = lineHeight
         paragraphStyle.maximumLineHeight = lineHeight
         paragraphStyle.lineSpacing = lineHeight * (lineSpacing.multiplier - 1)
         paragraphStyle.paragraphSpacing = addsParagraphSpacing ? lineHeight * paragraphSpacing.lines : 0
         paragraphStyle.firstLineHeadIndent = indentsParagraphs ? fontSize * paragraphIndent.ems : 0
-        paragraphStyle.alignment = usesReadableWidth ? .justified : .natural
+        paragraphStyle.alignment = usesReadableWidth && justifies ? .justified : .natural
         // 標準のタブストップは28pt間隔で12個しかないので、空にして`defaultTabInterval`の間隔で並べる
         paragraphStyle.tabStops = []
         paragraphStyle.defaultTabInterval = fontSize * Self.tabEms
@@ -101,6 +102,7 @@ struct EditorSettings: Equatable {
     private static let toolbarItemOrderKey = "toolbarItemOrder"
     private static let enabledToolbarItemsKey = "enabledToolbarItems"
     private static let toolbarItemsIgnoringSelectionKey = "toolbarItemsIgnoringSelection"
+    private static let toolbarFindOpensReplaceKey = "toolbarFindOpensReplace"
     private static let showsStatusBarSettingsButtonKey = "showsStatusBarSettingsButton"
     private static let showsStatusBarOnHoverKey = "showsStatusBarOnHover"
     private static let statusBarItemOrderKey = "statusBarItemOrder"
@@ -145,6 +147,7 @@ struct EditorSettings: Equatable {
         settings.toolbarItemsIgnoringSelection = Set(
             (defaults.stringArray(forKey: toolbarItemsIgnoringSelectionKey) ?? []).compactMap(ToolbarItemKind.init)
         )
+        settings.toolbarFindOpensReplace = defaults.bool(forKey: toolbarFindOpensReplaceKey)
         settings.statusBarItems = ExtensionItem.load(
             from: defaults,
             orderKey: statusBarItemOrderKey,
@@ -180,6 +183,7 @@ struct EditorSettings: Equatable {
             ToolbarItemKind.allCases.filter(toolbarItemsIgnoringSelection.contains).map(\.rawValue),
             forKey: Self.toolbarItemsIgnoringSelectionKey
         )
+        defaults.set(toolbarFindOpensReplace, forKey: Self.toolbarFindOpensReplaceKey)
         defaults.set(showsStatusBarSettingsButton, forKey: Self.showsStatusBarSettingsButtonKey)
         defaults.set(showsStatusBarOnHover, forKey: Self.showsStatusBarOnHoverKey)
         defaults.set(statusBarItems.map(\.kind.rawValue), forKey: Self.statusBarItemOrderKey)
@@ -365,124 +369,8 @@ extension EditorSettings {
     }
 }
 
-extension UserDefaults {
+nonisolated extension UserDefaults {
     func value<Value: RawRepresentable<String>>(forKey key: String, default defaultValue: Value) -> Value {
         string(forKey: key).flatMap(Value.init) ?? defaultValue
-    }
-}
-
-/// 並び順とON/OFFはrawValueで保存するので、caseの名前を変えると設定が失われる
-protocol ExtensionItemKind: RawRepresentable<String>, CaseIterable, Hashable where AllCases == [Self] {
-    var title: String { get }
-    var summary: String { get }
-    var symbol: String? { get }
-    var hasOptions: Bool { get }
-}
-
-extension ExtensionItemKind {
-    var symbol: String? {
-        nil
-    }
-
-    var hasOptions: Bool {
-        false
-    }
-}
-
-struct ExtensionItem<Kind: ExtensionItemKind>: Equatable {
-    let kind: Kind
-    var isEnabled: Bool
-
-    static var defaults: [Self] {
-        Kind.allCases.map { Self(kind: $0, isEnabled: false) }
-    }
-
-    static func load(from defaults: UserDefaults, orderKey: String, enabledKey: String) -> [Self] {
-        func kinds(forKey key: String) -> [Kind] {
-            (defaults.stringArray(forKey: key) ?? []).compactMap { Kind(rawValue: $0) }
-        }
-        let saved = kinds(forKey: orderKey)
-        let order = saved + Kind.allCases.filter { !saved.contains($0) }
-        let enabled = Set(kinds(forKey: enabledKey))
-        return order.map { Self(kind: $0, isEnabled: enabled.contains($0)) }
-    }
-}
-
-enum ToolbarItemKind: String, ExtensionItemKind {
-    case copy
-    case save
-    case share
-    case delete
-
-    var title: String {
-        switch self {
-        case .copy: String(localized: "toolbarItem.copy")
-        case .save: String(localized: "toolbarItem.save")
-        case .share: String(localized: "toolbarItem.share")
-        case .delete: String(localized: "toolbarItem.delete")
-        }
-    }
-
-    var summary: String {
-        switch self {
-        case .copy: String(localized: "toolbarItem.copy.summary")
-        case .save: String(localized: "toolbarItem.save.summary")
-        case .share: String(localized: "toolbarItem.share.summary")
-        case .delete: String(localized: "toolbarItem.delete.summary")
-        }
-    }
-
-    var symbol: String? {
-        switch self {
-        case .copy: "doc.on.doc"
-        case .save: "square.and.arrow.down"
-        case .share: "square.and.arrow.up"
-        case .delete: "trash"
-        }
-    }
-
-    var selectionOptionTitle: String? {
-        switch self {
-        case .copy: String(localized: "settings.toolbarItem.copy.usesSelection")
-        case .save: nil
-        case .share: String(localized: "settings.toolbarItem.share.usesSelection")
-        case .delete: String(localized: "settings.toolbarItem.delete.usesSelection")
-        }
-    }
-
-    var hasOptions: Bool {
-        selectionOptionTitle != nil
-    }
-}
-
-enum StatusBarItemKind: String, ExtensionItemKind {
-    case characterCount
-    case wordCount
-    case fileEncoding
-    case lineEnding
-
-    var title: String {
-        switch self {
-        case .characterCount: String(localized: "statusBarItem.characterCount")
-        case .wordCount: String(localized: "statusBarItem.wordCount")
-        case .fileEncoding: String(localized: "statusBarItem.fileEncoding")
-        case .lineEnding: String(localized: "statusBarItem.lineEnding")
-        }
-    }
-
-    var summary: String {
-        switch self {
-        case .characterCount: String(localized: "statusBarItem.characterCount.summary")
-        case .wordCount: String(localized: "statusBarItem.wordCount.summary")
-        case .fileEncoding: String(localized: "statusBarItem.fileEncoding.summary")
-        case .lineEnding: String(localized: "statusBarItem.lineEnding.summary")
-        }
-    }
-
-    var hasOptions: Bool {
-        switch self {
-        case .characterCount, .wordCount: true
-        case .fileEncoding, .lineEnding: false
-        }
     }
 }

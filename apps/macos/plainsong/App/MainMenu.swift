@@ -91,6 +91,28 @@ enum MainMenu {
             item("menu.copy", #selector(NSText.copy(_:)), key: "c"),
             item("menu.paste", #selector(NSText.paste(_:)), key: "v"),
             item("menu.selectAll", #selector(NSText.selectAll(_:)), key: "a"),
+            .separator(),
+            submenu("menu.find", [
+                item("menu.find.find", #selector(EditorWindowController.showFindPanel(_:)), key: "f"),
+                item(
+                    "menu.find.findAndReplace",
+                    #selector(EditorWindowController.showReplacePanel(_:)),
+                    key: "f",
+                    modifiers: [.command, .option]
+                ),
+                item("menu.find.next", #selector(EditorWindowController.findNextResult(_:)), key: "g"),
+                item("menu.find.previous", #selector(EditorWindowController.findPreviousResult(_:)), key: "G"),
+                item("menu.find.selectAll", #selector(EditorWindowController.selectAllResults(_:))),
+                item("menu.find.replaceAll", #selector(EditorWindowController.replaceAllResults(_:))),
+                .separator(),
+                item("menu.find.useSelection", #selector(EditorWindowController.useSelectionForFind(_:)), key: "e"),
+                item(
+                    "menu.find.useSelectionForReplace",
+                    #selector(EditorWindowController.useSelectionForReplace(_:)),
+                    key: "E"
+                ),
+                item("menu.find.jumpToSelection", #selector(NSTextView.centerSelectionInVisibleArea(_:)), key: "j"),
+            ]),
         ])
     }
 

@@ -4,8 +4,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private let editorWindow: NSWindow
     /// ステータスバーを本文に重ねるための入れ物。NSScrollViewは、サブビューにAuto Layoutの結果を反映しない
     private let container = NSView()
-    private let scrollView = NSScrollView()
-    private let textView: NSTextView
+    let scrollView = NSScrollView()
+    let textView: NSTextView
     private let layoutManager: LineHeightSegmentLayoutManager
     /// レイアウトマネージャーはデリゲートを弱参照で持つので、ここで持っておく
     private let whitespaceMarkers = WhitespaceMarkers()
@@ -155,7 +155,9 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         // 明朝の欧文は文字サイズによって行の高さが1ptずれるので、フォントを切り替えても行送りが変わらないようゴシックの高さに揃える
         let sansSerif = EditorSettings.FontFamily.sansSerif.font(ofSize: settings.fontSize)
         let lineHeight = Self.metrics.defaultLineHeight(for: sansSerif)
-        let paragraphStyle = settings.paragraphStyle(lineHeight: lineHeight)
+        // 入力しているあいだは、字間が広がったり縮んだりして文字が動かないよう、両端揃えにしない
+        // 検索のパネルに移っただけで組み直さないよう、キーウインドウではなくメインウインドウかどうかで見分ける
+        let paragraphStyle = settings.paragraphStyle(lineHeight: lineHeight, justifies: !editorWindow.isMainWindow)
         layoutManager.lineHeight = lineHeight
 
         // defaultParagraphStyleは、変換を通さずに入力した文字には付かないので、入力する文字の属性に指定する
@@ -193,7 +195,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         statusBar?.backgroundColor = theme?.background
         whitespaceMarkers.color = theme?.foreground.map { $0.withAlphaComponent(0.3) } ?? .tertiaryLabelColor
         if whitespaceMarkers.scope != nil || whitespaceMarkers.showsNewlines {
-            redrawWhitespace()
+            redrawText()
         }
     }
 
@@ -218,7 +220,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
             self.selectionObservation = nil
             whitespaceMarkers.selectedRanges = []
         }
-        redrawWhitespace()
+        redrawText()
     }
 
     /// カーソルを動かしただけなら何もしない
@@ -226,11 +228,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         let ranges = textView.nonEmptySelectedRanges
         guard ranges != whitespaceMarkers.selectedRanges else { return }
         whitespaceMarkers.selectedRanges = ranges
-        redrawWhitespace()
+        redrawText()
     }
 
     /// NSTextViewは、見えている段落をそれぞれサブビューに描いて残し、描画用の属性やレイアウトを無効にしても描き直さないので、サブビューに描き直させる
-    private func redrawWhitespace() {
+    func redrawText() {
         func setNeedsDisplay(_ view: NSView) {
             view.needsDisplay = true
             view.subviews.forEach(setNeedsDisplay)
@@ -257,6 +259,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
             editorWindow.toolbar = toolbar?.toolbar
         }
         toolbar?.kindsIgnoringSelection = settings.toolbarItemsIgnoringSelection
+        toolbar?.findOpensReplace = settings.toolbarFindOpensReplace
         measureTitlebar()
     }
 
@@ -429,6 +432,19 @@ extension EditorWindowController: NSTextViewDelegate {
         presentMixedLineEndingNoticeIfNeeded()
     }
 
+    func windowDidBecomeMain(_: Notification) {
+        updateJustification()
+    }
+
+    func windowDidResignMain(_: Notification) {
+        updateJustification()
+    }
+
+    private func updateJustification() {
+        guard let settings, settings.usesReadableWidth else { return }
+        applyFont(of: settings)
+    }
+
     private func presentMixedLineEndingNoticeIfNeeded() {
         guard needsMixedLineEndingNotice, editorWindow.isKeyWindow, editorWindow.attachedSheet == nil else { return }
         needsMixedLineEndingNotice = false
@@ -479,18 +495,5 @@ extension EditorWindowController: NSTextViewDelegate {
             }
         }
         storage.endEditing()
-    }
-}
-
-extension NSTextView {
-    var nonEmptySelectedRanges: [NSRange] {
-        selectedRanges.map(\.rangeValue).filter { $0.length > 0 }
-    }
-
-    /// 変換中の文字は本文にはないので、本文を書き換える前に捨てる
-    func discardMarkedTextIfNeeded() {
-        if hasMarkedText() {
-            inputContext?.discardMarkedText()
-        }
     }
 }

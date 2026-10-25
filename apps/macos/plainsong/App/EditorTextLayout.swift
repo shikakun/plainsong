@@ -102,4 +102,15 @@ extension NSTextView {
             textContainerInset = NSSize(width: leading, height: 0)
         }
     }
+
+    var nonEmptySelectedRanges: [NSRange] {
+        selectedRanges.map(\.rangeValue).filter { $0.length > 0 }
+    }
+
+    /// 変換中に本文を書き換えると、入力メソッドが変換している範囲と本文が食い違うので、先に変換を取り消す
+    func discardMarkedTextIfNeeded() {
+        if hasMarkedText() {
+            inputContext?.discardMarkedText()
+        }
+    }
 }

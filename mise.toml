@@ -31,7 +31,7 @@ description = "Generate project and build the app"
 dir = "apps/macos"
 run = """
 xcodegen generate
-xcodebuild -scheme plainsong -project plainsong.xcodeproj build -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
+xcodebuild -scheme plainsong -project plainsong.xcodeproj build -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO
 """
 
 [tasks."macos:test"]
@@ -39,7 +39,7 @@ description = "Generate project and run unit tests"
 dir = "apps/macos"
 run = """
 xcodegen generate
-xcodebuild -scheme plainsong -project plainsong.xcodeproj test -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
+xcodebuild -scheme plainsong -project plainsong.xcodeproj test -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO
 """
 
 [tasks."macos:periphery"]
@@ -56,7 +56,7 @@ dir = "apps/macos"
 run = """
 xcodegen generate
 xcodebuild -scheme plainsong -project plainsong.xcodeproj \
-  -configuration Release -destination 'platform=macOS' \
+  -configuration Release -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath build/dd \
   CONFIGURATION_BUILD_DIR="$(pwd)/build/Release" \
   -allowProvisioningUpdates build
@@ -71,7 +71,7 @@ dir = "apps/macos"
 run = """
 xcodegen generate
 xcodebuild -scheme plainsong -project plainsong.xcodeproj \
-  -configuration Release -destination 'platform=macOS' \
+  -configuration Release -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath build/bench/dd \
   CONFIGURATION_BUILD_DIR="$(pwd)/build/bench/Release" \
   CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
