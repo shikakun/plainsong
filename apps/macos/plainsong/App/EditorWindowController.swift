@@ -155,7 +155,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         // 明朝の欧文は文字サイズによって行の高さが1ptずれるので、フォントを切り替えても行送りが変わらないようゴシックの高さに揃える
         let sansSerif = EditorSettings.FontFamily.sansSerif.font(ofSize: settings.fontSize)
         let lineHeight = Self.metrics.defaultLineHeight(for: sansSerif)
-        let paragraphStyle = settings.paragraphStyle(lineHeight: lineHeight)
+        // 入力しているあいだは、字間が広がったり縮んだりして文字が動かないよう、両端揃えにしない
+        let paragraphStyle = settings.paragraphStyle(lineHeight: lineHeight, justifies: !editorWindow.isKeyWindow)
         layoutManager.lineHeight = lineHeight
 
         // defaultParagraphStyleは、変換を通さずに入力した文字には付かないので、入力する文字の属性に指定する
@@ -426,7 +427,17 @@ extension EditorWindowController: NSTextViewDelegate {
     }
 
     func windowDidBecomeKey(_: Notification) {
+        updateJustification()
         presentMixedLineEndingNoticeIfNeeded()
+    }
+
+    func windowDidResignKey(_: Notification) {
+        updateJustification()
+    }
+
+    private func updateJustification() {
+        guard let settings, settings.usesReadableWidth else { return }
+        applyFont(of: settings)
     }
 
     private func presentMixedLineEndingNoticeIfNeeded() {
@@ -479,18 +490,5 @@ extension EditorWindowController: NSTextViewDelegate {
             }
         }
         storage.endEditing()
-    }
-}
-
-extension NSTextView {
-    var nonEmptySelectedRanges: [NSRange] {
-        selectedRanges.map(\.rangeValue).filter { $0.length > 0 }
-    }
-
-    /// 変換中の文字は本文にはないので、本文を書き換える前に捨てる
-    func discardMarkedTextIfNeeded() {
-        if hasMarkedText() {
-            inputContext?.discardMarkedText()
-        }
     }
 }

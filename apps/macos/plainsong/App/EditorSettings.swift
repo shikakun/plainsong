@@ -68,14 +68,14 @@ struct EditorSettings: Equatable {
         statusBarItems.filter(\.isEnabled).map(\.kind)
     }
 
-    func paragraphStyle(lineHeight: CGFloat) -> NSParagraphStyle {
+    func paragraphStyle(lineHeight: CGFloat, justifies: Bool) -> NSParagraphStyle {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.minimumLineHeight = lineHeight
         paragraphStyle.maximumLineHeight = lineHeight
         paragraphStyle.lineSpacing = lineHeight * (lineSpacing.multiplier - 1)
         paragraphStyle.paragraphSpacing = addsParagraphSpacing ? lineHeight * paragraphSpacing.lines : 0
         paragraphStyle.firstLineHeadIndent = indentsParagraphs ? fontSize * paragraphIndent.ems : 0
-        paragraphStyle.alignment = usesReadableWidth ? .justified : .natural
+        paragraphStyle.alignment = usesReadableWidth && justifies ? .justified : .natural
         // 標準のタブストップは28pt間隔で12個しかないので、空にして`defaultTabInterval`の間隔で並べる
         paragraphStyle.tabStops = []
         paragraphStyle.defaultTabInterval = fontSize * Self.tabEms
