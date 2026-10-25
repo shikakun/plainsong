@@ -369,7 +369,7 @@ extension EditorSettings {
     }
 }
 
-extension UserDefaults {
+nonisolated extension UserDefaults {
     func value<Value: RawRepresentable<String>>(forKey key: String, default defaultValue: Value) -> Value {
         string(forKey: key).flatMap(Value.init) ?? defaultValue
     }
