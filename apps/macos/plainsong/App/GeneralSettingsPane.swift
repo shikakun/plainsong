@@ -18,6 +18,11 @@ final class GeneralSettingsPane: SettingsPane {
     )
     private let readableWidthButton = NSPopUpButton()
     private var readableWidthRow: NSGridRow?
+    private let markdownCheckbox = NSButton(
+        checkboxWithTitle: String(localized: "settings.highlightsMarkdown"),
+        target: nil,
+        action: nil
+    )
     private let newlinesCheckbox = NSButton(
         checkboxWithTitle: String(localized: "settings.showsNewlines"),
         target: nil,
@@ -217,6 +222,7 @@ final class GeneralSettingsPane: SettingsPane {
         kerningCheckbox.state = settings.usesKerning ? .on : .off
         readableWidthCheckbox.state = settings.usesReadableWidth ? .on : .off
         readableWidthButton.selectItem(for: settings.readableWidth)
+        markdownCheckbox.state = settings.highlightsMarkdown ? .on : .off
         newlinesCheckbox.state = settings.showsNewlines ? .on : .off
         whitespaceCheckbox.state = settings.showsWhitespace ? .on : .off
         whitespaceScopeButton.selectItem(for: settings.whitespaceScope)
@@ -336,6 +342,10 @@ extension GeneralSettingsPane {
         readableWidthButton.action = #selector(changeReadableWidth(_:))
         readableWidthButton.setAccessibilityLabel(String(localized: "settings.readableWidth"))
 
+        markdownCheckbox.target = self
+        markdownCheckbox.action = #selector(changeHighlightsMarkdown(_:))
+        markdownCheckbox.setAccessibilityHelp(String(localized: "settings.highlightsMarkdown.help"))
+
         newlinesCheckbox.target = self
         newlinesCheckbox.action = #selector(changeShowsNewlines(_:))
 
@@ -375,6 +385,7 @@ extension GeneralSettingsPane {
             [NSGridCell.emptyContentView, paragraphIndentButton],
             [NSGridCell.emptyContentView, readableWidthCheckbox],
             [NSGridCell.emptyContentView, readableWidthButton],
+            [NSGridCell.emptyContentView, markdownCheckbox],
         ])
         optionsGrid.rowSpacing = 6
         whitespaceScopeRow = indent(whitespaceScopeButton, under: whitespaceCheckbox, in: optionsGrid)
@@ -404,6 +415,10 @@ extension GeneralSettingsPane {
     @objc private func changeReadableWidth(_ sender: NSPopUpButton) {
         guard let readableWidth = sender.selectedCase(of: EditorSettings.ReadableWidth.self) else { return }
         model.update { $0.readableWidth = readableWidth }
+    }
+
+    @objc private func changeHighlightsMarkdown(_ sender: NSButton) {
+        model.update { $0.highlightsMarkdown = sender.state == .on }
     }
 
     @objc private func changeShowsNewlines(_ sender: NSButton) {

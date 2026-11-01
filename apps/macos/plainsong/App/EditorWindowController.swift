@@ -9,6 +9,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private let layoutManager: LineHeightSegmentLayoutManager
     /// レイアウトマネージャーはデリゲートを弱参照で持つので、ここで持っておく
     private let whitespaceMarkers = WhitespaceMarkers()
+    private let markdownHighlighter: MarkdownHighlighter
     private var selectionObservation: (any NSObjectProtocol)?
     private var clipViewFrameObservation: (any NSObjectProtocol)?
     /// ツールバーを含む高さ。全画面でタイトルバーが隠れても余白が変わらないよう、全画面のあいだは測り直さない
@@ -43,6 +44,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
             defer: false
         )
         (textView, layoutManager) = Self.makeTextView()
+        markdownHighlighter = MarkdownHighlighter(textView: textView)
         standardSelectedTextAttributes = textView.selectedTextAttributes
         super.init(window: editorWindow)
         editorWindow.delegate = self
@@ -94,9 +96,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     }
 
     /// 下書きのタイトルは見せないが、VoiceOverやウインドウメニューで読まれる。ファイルは、ファイル名とプロキシアイコンを見せる
+    /// ファイルの名前が変わるたびに呼ばれるので、MDXかどうかもここで決め直す
     override func synchronizeWindowTitleWithDocumentName() {
         super.synchronizeWindowTitleWithDocumentName()
         editorWindow.titleVisibility = (document as? NSDocument)?.fileURL == nil ? .hidden : .visible
+        applyMarkdown()
     }
 
     /// 書類の取り消しの履歴を使い、NSDocumentに変更を知らせる
@@ -140,6 +144,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         if settings.theme != previous?.theme ?? .standard {
             applyTheme(ThemeLibrary().theme(for: settings.theme))
         }
+        applyMarkdown()
         applyWhitespace(of: settings)
         applyLineNumbers(of: settings)
         observeClipViewFrame(settings.usesReadableWidth || settings.showsLineNumbers)
@@ -155,9 +160,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         // 明朝の欧文は文字サイズによって行の高さが1ptずれるので、フォントを切り替えても行送りが変わらないようゴシックの高さに揃える
         let sansSerif = EditorSettings.FontFamily.sansSerif.font(ofSize: settings.fontSize)
         let lineHeight = Self.metrics.defaultLineHeight(for: sansSerif)
-        // 入力しているあいだは、字間が広がったり縮んだりして文字が動かないよう、両端揃えにしない
-        // 検索のパネルに移っただけで組み直さないよう、キーウインドウではなくメインウインドウかどうかで見分ける
-        let paragraphStyle = settings.paragraphStyle(lineHeight: lineHeight, justifies: !editorWindow.isMainWindow)
+        let paragraphStyle = settings.paragraphStyle(lineHeight: lineHeight)
         layoutManager.lineHeight = lineHeight
 
         // defaultParagraphStyleは、変換を通さずに入力した文字には付かないので、入力する文字の属性に指定する
@@ -197,6 +200,13 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         if whitespaceMarkers.scope != nil || whitespaceMarkers.showsNewlines {
             redrawText()
         }
+    }
+
+    /// `applyFont(of:)`と`applyTheme(_:)`が本文全体のフォントと色を上書きするので、そのあとに毎回呼ぶ
+    private func applyMarkdown() {
+        guard let settings else { return }
+        let flavor = settings.highlightsMarkdown ? MarkdownSyntax.Flavor(url: (document as? NSDocument)?.fileURL) : nil
+        markdownHighlighter.update(flavor: flavor, appearance: .init(settings: settings, theme: theme))
     }
 
     private func applyWhitespace(of settings: EditorSettings) {
@@ -409,8 +419,13 @@ extension EditorWindowController {
 }
 
 extension EditorWindowController: NSTextViewDelegate {
-    /// applyFont(of:)とapplyTheme(_:)が本文全体に付ける属性
-    private static let formattingKeys: [NSAttributedString.Key] = [.font, .paragraphStyle, .kern, .foregroundColor]
+    func textView(
+        _: NSTextView,
+        shouldChangeTypingAttributes _: [String: Any],
+        toAttributes attributes: [NSAttributedString.Key: Any]
+    ) -> [NSAttributedString.Key: Any] {
+        markdownHighlighter.plainAttributes(attributes)
+    }
 
     /// NSTextViewは、改行キーでいつも\nを入れる
     func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
@@ -432,19 +447,6 @@ extension EditorWindowController: NSTextViewDelegate {
         presentMixedLineEndingNoticeIfNeeded()
     }
 
-    func windowDidBecomeMain(_: Notification) {
-        updateJustification()
-    }
-
-    func windowDidResignMain(_: Notification) {
-        updateJustification()
-    }
-
-    private func updateJustification() {
-        guard let settings, settings.usesReadableWidth else { return }
-        applyFont(of: settings)
-    }
-
     private func presentMixedLineEndingNoticeIfNeeded() {
         guard needsMixedLineEndingNotice, editorWindow.isKeyWindow, editorWindow.attachedSheet == nil else { return }
         needsMixedLineEndingNotice = false
@@ -459,41 +461,5 @@ extension EditorWindowController: NSTextViewDelegate {
                 UserDefaults.standard.set(true, forKey: suppressionKey)
             }
         }
-    }
-
-    @objc private func undoManagerDidChange(_ notification: Notification) {
-        guard let undoManager = (document as? NSDocument)?.undoManager,
-              notification.object as? UndoManager === undoManager
-        else { return }
-        normalizeFormatting()
-    }
-
-    /// 取り消しとやり直しは、消した時点の属性ごと文字を戻すので、そのあとに設定を変えていたら、今の書式に直す
-    /// 属性の変更なので、TextStoreは記録せず、取り消しの履歴にも入らない
-    private func normalizeFormatting() {
-        // 変換中は、入力する文字の属性が設定の書式と異なることがある
-        guard !textView.hasMarkedText(), let storage = textView.textStorage, storage.length > 0 else { return }
-        let current = textView.typingAttributes
-        var staleRanges: [NSRange] = []
-        storage.enumerateAttributes(in: NSRange(location: 0, length: storage.length)) { attributes, range, _ in
-            let isStale = Self.formattingKeys.contains { key in
-                attributes[key] as? NSObject != current[key] as? NSObject
-            }
-            if isStale {
-                staleRanges.append(range)
-            }
-        }
-        guard !staleRanges.isEmpty else { return }
-        storage.beginEditing()
-        for range in staleRanges {
-            for key in Self.formattingKeys {
-                if let value = current[key] {
-                    storage.addAttribute(key, value: value, range: range)
-                } else {
-                    storage.removeAttribute(key, range: range)
-                }
-            }
-        }
-        storage.endEditing()
     }
 }

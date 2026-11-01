@@ -23,6 +23,22 @@ struct ThemeTests {
         #expect(theme.cursor == nil)
         #expect(theme.selectionBackground == nil)
         #expect(theme.selectionForeground == nil)
+        #expect(hex(theme.palette[0]) == "111111")
+    }
+
+    @Test
+    func readsPaletteEntries() {
+        let theme = Theme(ghosttyConfig: """
+        palette = 6=#3aa99f
+        palette = 6 = #24837b
+        palette = 1=#d14d41
+        palette = 1=
+        palette = 256=#ffffff
+        palette = cyan=#ffffff
+        """)
+        #expect(hex(theme.palette[6]) == "24837B")
+        #expect(theme.palette[1] == nil)
+        #expect(theme.palette.count == 1)
     }
 
     @Test

@@ -819,6 +819,38 @@
         }
       }
     },
+    "settings.highlightsMarkdown" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Highlight Markdown Syntax"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markdownの記法を強調する"
+          }
+        }
+      }
+    },
+    "settings.highlightsMarkdown.help" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows headings and bold text in bold, and colors markup and code"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "見出しと強調を太字にし、記号とコードに色を付けます"
+          }
+        }
+      }
+    },
     "settings.icon" : {
       "localizations" : {
         "en" : {

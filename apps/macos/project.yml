@@ -55,6 +55,32 @@ targets:
             LSItemContentTypes:
               - public.plain-text
             NSDocumentClass: $(PRODUCT_MODULE_NAME).TextDocument
+          - CFBundleTypeName: Markdown
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - net.daringfireball.markdown
+              - com.shikakun.plainsong.mdx
+            NSDocumentClass: $(PRODUCT_MODULE_NAME).TextDocument
+        # MarkdownはmacOS 27まで、MDXはどのバージョンでもシステムが型を宣言しておらず、MDXには決まった識別子もないので、Plainsongで宣言する
+        UTImportedTypeDeclarations:
+          - UTTypeIdentifier: net.daringfireball.markdown
+            UTTypeDescription: Markdown
+            UTTypeConformsTo:
+              - public.plain-text
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - md
+                - markdown
+              public.mime-type:
+                - text/markdown
+          - UTTypeIdentifier: com.shikakun.plainsong.mdx
+            UTTypeDescription: MDX
+            UTTypeConformsTo:
+              - public.plain-text
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - mdx
     sources:
       - path: plainsong
         excludes:
