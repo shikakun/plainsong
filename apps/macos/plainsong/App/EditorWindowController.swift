@@ -157,7 +157,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     /// 本文全体を1回の編集で書き換える。属性の変更なので、TextStoreは記録せず、取り消しの履歴にも入らない
     private func applyFont(of settings: EditorSettings) {
         let font = settings.fontFamily.font(ofSize: settings.fontSize)
-        // 明朝の欧文は文字サイズによって行の高さが1ptずれるので、フォントを切り替えても行送りが変わらないようゴシックの高さに揃える
+        // 明朝体の欧文は文字サイズによって行の高さが1ptずれるので、フォントを切り替えても行送りが変わらないようゴシック体の高さに揃える
         let sansSerif = EditorSettings.FontFamily.sansSerif.font(ofSize: settings.fontSize)
         let lineHeight = Self.metrics.defaultLineHeight(for: sansSerif)
         let paragraphStyle = settings.paragraphStyle(lineHeight: lineHeight)

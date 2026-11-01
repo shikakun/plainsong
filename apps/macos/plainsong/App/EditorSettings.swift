@@ -214,7 +214,7 @@ extension EditorSettings {
             let font = NSFont.systemFont(ofSize: size)
             switch self {
             case .sansSerif:
-                // 日本語のフォールバック先としてOSが選ぶフォントは、全角を文字サイズの約0.92倍に縮めて描くので、明朝と大きさが揃わない
+                // 日本語のフォールバック先としてOSが選ぶフォントは、全角を文字サイズの約0.92倍に縮めて描くので、明朝体と大きさが揃わない
                 let descriptor = font.fontDescriptor.addingAttributes([
                     .cascadeList: [NSFontDescriptor(name: "HiraginoSans-W4", size: size)],
                 ])
@@ -232,7 +232,7 @@ extension EditorSettings {
             return NSFont(descriptor: descriptor, size: size) ?? font
         }
 
-        /// OSに任せると和文が太字にならないことがあるので、ヒラギノの太いウェイトを指定する。明朝にはW7がないのでW6にする
+        /// OSに任せると和文が太字にならないことがあるので、ヒラギノの太いウェイトを指定する。明朝体にはW7がないのでW6にする
         func boldFont(ofSize size: CGFloat) -> NSFont {
             let font = NSFont.systemFont(ofSize: size, weight: .bold)
             let (descriptor, japaneseName) = switch self {
