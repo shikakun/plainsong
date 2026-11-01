@@ -7,6 +7,7 @@ struct Theme {
     var cursor: NSColor?
     var selectionBackground: NSColor?
     var selectionForeground: NSColor?
+    var palette: [Int: NSColor] = [:]
 
     /// Ghosttyの設定ファイルと同じく、同じキーは後の行を使い、空の値はそれまでの指定を取り消す
     init(ghosttyConfig text: String) {
@@ -15,16 +16,26 @@ struct Theme {
             guard !line.hasPrefix("#") else { continue }
             let parts = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
             guard parts.count == 2 else { continue }
-            let color = Self.color(parts[1].trimmingCharacters(in: .whitespaces))
+            let value = parts[1].trimmingCharacters(in: .whitespaces)
             switch parts[0].trimmingCharacters(in: .whitespaces) {
-            case "background": background = color
-            case "foreground": foreground = color
-            case "cursor-color": cursor = color
-            case "selection-background": selectionBackground = color
-            case "selection-foreground": selectionForeground = color
+            case "background": background = Self.color(value)
+            case "foreground": foreground = Self.color(value)
+            case "cursor-color": cursor = Self.color(value)
+            case "selection-background": selectionBackground = Self.color(value)
+            case "selection-foreground": selectionForeground = Self.color(value)
+            case "palette": readPaletteEntry(value)
             default: continue
             }
         }
+    }
+
+    private mutating func readPaletteEntry(_ value: String) {
+        let parts = value.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+        guard parts.count == 2,
+              let index = Int(parts[0].trimmingCharacters(in: .whitespaces)),
+              (0 ... 255).contains(index)
+        else { return }
+        palette[index] = Self.color(parts[1].trimmingCharacters(in: .whitespaces))
     }
 
     var hasColors: Bool {

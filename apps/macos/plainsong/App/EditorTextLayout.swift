@@ -52,7 +52,7 @@ final nonisolated class LineHeightSegmentLayoutManager: NSTextLayoutManager {
     }
 }
 
-/// 和文の始め括弧か空白で始まる段落は、1行目を下げずに組む。組むときの段落だけを差し替え、本文の属性は書き換えない
+/// 和文の始め括弧か空白で始まる段落と、Markdownの見出しやリストなどの行は、1行目を下げずに組む。組むときの段落だけを差し替え、本文の属性は書き換えない
 /// 状態を持たないので、どのウィンドウも1つを使い回す。コンテンツストレージはデリゲートを弱参照で持つが、共有のインスタンスなので解放されない
 final nonisolated class ParagraphIndentRules: NSObject, NSTextContentStorageDelegate, Sendable {
     static let shared = ParagraphIndentRules()
@@ -66,13 +66,19 @@ final nonisolated class ParagraphIndentRules: NSObject, NSTextContentStorageDele
         return !openingBrackets.contains(character) && !CharacterSet.whitespaces.contains(scalar)
     }
 
+    private static func indents(paragraphAt location: Int, in storage: NSTextStorage) -> Bool {
+        let style = storage.attribute(.markdownStyle, at: location, effectiveRange: nil) as? Int ?? 0
+        return indents(paragraphStartingWith: storage.mutableString.character(at: location))
+            && !MarkdownSyntax.Style(rawValue: style).contains(.unindented)
+    }
+
     func textContentStorage(
         _ textContentStorage: NSTextContentStorage,
         textParagraphWith range: NSRange
     ) -> NSTextParagraph? {
         guard let storage = textContentStorage.textStorage,
               range.length > 0,
-              !Self.indents(paragraphStartingWith: storage.mutableString.character(at: range.location)),
+              !Self.indents(paragraphAt: range.location, in: storage),
               let style = storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil)
               as? NSParagraphStyle,
               style.firstLineHeadIndent > 0,

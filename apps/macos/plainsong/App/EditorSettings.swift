@@ -40,6 +40,7 @@ struct EditorSettings: Equatable {
     var usesKerning = false
     var usesReadableWidth = false
     var readableWidth = ReadableWidth.standard
+    var highlightsMarkdown = true
     var showsNewlines = false
     var showsWhitespace = false
     var whitespaceScope = WhitespaceScope.all
@@ -69,14 +70,13 @@ struct EditorSettings: Equatable {
         statusBarItems.filter(\.isEnabled).map(\.kind)
     }
 
-    func paragraphStyle(lineHeight: CGFloat, justifies: Bool) -> NSParagraphStyle {
+    func paragraphStyle(lineHeight: CGFloat) -> NSParagraphStyle {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.minimumLineHeight = lineHeight
         paragraphStyle.maximumLineHeight = lineHeight
         paragraphStyle.lineSpacing = lineHeight * (lineSpacing.multiplier - 1)
         paragraphStyle.paragraphSpacing = addsParagraphSpacing ? lineHeight * paragraphSpacing.lines : 0
         paragraphStyle.firstLineHeadIndent = indentsParagraphs ? fontSize * paragraphIndent.ems : 0
-        paragraphStyle.alignment = usesReadableWidth && justifies ? .justified : .natural
         // 標準のタブストップは28pt間隔で12個しかないので、空にして`defaultTabInterval`の間隔で並べる
         paragraphStyle.tabStops = []
         paragraphStyle.defaultTabInterval = fontSize * Self.tabEms
@@ -89,6 +89,7 @@ struct EditorSettings: Equatable {
     private static let usesKerningKey = "usesKerning"
     private static let usesReadableWidthKey = "usesReadableWidth"
     private static let readableWidthKey = "readableWidth"
+    private static let highlightsMarkdownKey = "highlightsMarkdown"
     private static let showsNewlinesKey = "showsNewlines"
     private static let showsWhitespaceKey = "showsWhitespace"
     private static let whitespaceScopeKey = "whitespaceScope"
@@ -122,6 +123,9 @@ struct EditorSettings: Equatable {
         }
         settings.usesReadableWidth = defaults.bool(forKey: usesReadableWidthKey)
         settings.readableWidth = defaults.value(forKey: readableWidthKey, default: settings.readableWidth)
+        if let highlightsMarkdown = defaults.object(forKey: highlightsMarkdownKey) as? Bool {
+            settings.highlightsMarkdown = highlightsMarkdown
+        }
         settings.showsNewlines = defaults.bool(forKey: showsNewlinesKey)
         settings.showsWhitespace = defaults.bool(forKey: showsWhitespaceKey)
         settings.whitespaceScope = defaults.value(forKey: whitespaceScopeKey, default: settings.whitespaceScope)
@@ -166,6 +170,7 @@ struct EditorSettings: Equatable {
         defaults.set(usesKerning, forKey: Self.usesKerningKey)
         defaults.set(usesReadableWidth, forKey: Self.usesReadableWidthKey)
         defaults.set(readableWidth.rawValue, forKey: Self.readableWidthKey)
+        defaults.set(highlightsMarkdown, forKey: Self.highlightsMarkdownKey)
         defaults.set(showsNewlines, forKey: Self.showsNewlinesKey)
         defaults.set(showsWhitespace, forKey: Self.showsWhitespaceKey)
         defaults.set(whitespaceScope.rawValue, forKey: Self.whitespaceScopeKey)
@@ -209,14 +214,33 @@ extension EditorSettings {
             let font = NSFont.systemFont(ofSize: size)
             switch self {
             case .sansSerif:
-                // 日本語のフォールバック先としてOSが選ぶフォントは、全角を文字サイズの約0.92倍に縮めて描くので、明朝と大きさが揃わない
-                let descriptor = font.fontDescriptor.addingAttributes([
-                    .cascadeList: [NSFontDescriptor(name: "HiraginoSans-W4", size: size)],
-                ])
-                return NSFont(descriptor: descriptor, size: size) ?? font
+                // 日本語のフォールバック先としてOSが選ぶフォントは、全角を文字サイズの約0.92倍に縮めて描くので、明朝体と大きさが揃わない
+                return Self.font(font.fontDescriptor, size: size, japanese: "HiraginoSans-W4") ?? font
             case .serif:
                 return font.fontDescriptor.withDesign(.serif).flatMap { NSFont(descriptor: $0, size: size) } ?? font
             }
+        }
+
+        static func monospacedFont(ofSize size: CGFloat) -> NSFont {
+            let font = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+            return Self.font(font.fontDescriptor, size: size, japanese: "HiraginoSans-W4") ?? font
+        }
+
+        /// OSに任せると和文が太字にならないことがあるので、ヒラギノの太いウェイトを指定する。明朝体にはW7がないのでW6にする
+        func boldFont(ofSize size: CGFloat) -> NSFont {
+            let font = NSFont.systemFont(ofSize: size, weight: .bold)
+            let (descriptor, japanese) = switch self {
+            case .sansSerif: (font.fontDescriptor, "HiraginoSans-W7")
+            case .serif: (font.fontDescriptor.withDesign(.serif) ?? font.fontDescriptor, "HiraMinProN-W6")
+            }
+            return Self.font(descriptor, size: size, japanese: japanese) ?? font
+        }
+
+        private static func font(_ descriptor: NSFontDescriptor, size: CGFloat, japanese name: String) -> NSFont? {
+            let cascaded = descriptor.addingAttributes([
+                .cascadeList: [NSFontDescriptor(name: name, size: size)],
+            ])
+            return NSFont(descriptor: cascaded, size: size)
         }
     }
 

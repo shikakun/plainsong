@@ -186,6 +186,11 @@ final class TextDocument: NSDocument {
         }
     }
 
+    /// どの形式も中身は同じプレーンテキストなので、保存パネルに形式を選ぶメニューを出さない
+    override var shouldRunSavePanelWithAccessoryView: Bool {
+        false
+    }
+
     override func prepareSavePanel(_ savePanel: NSSavePanel) -> Bool {
         if fileURL == nil, let name = Self.fileName(for: text) {
             savePanel.nameFieldStringValue = name
