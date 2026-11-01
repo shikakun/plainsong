@@ -66,9 +66,10 @@ final nonisolated class ParagraphIndentRules: NSObject, NSTextContentStorageDele
         return !openingBrackets.contains(character) && !CharacterSet.whitespaces.contains(scalar)
     }
 
-    private static func isUnindented(at location: Int, in storage: NSTextStorage) -> Bool {
+    private static func indents(paragraphAt location: Int, in storage: NSTextStorage) -> Bool {
         let style = storage.attribute(.markdownStyle, at: location, effectiveRange: nil) as? Int ?? 0
-        return MarkdownSyntax.Style(rawValue: style).contains(.unindented)
+        return indents(paragraphStartingWith: storage.mutableString.character(at: location))
+            && !MarkdownSyntax.Style(rawValue: style).contains(.unindented)
     }
 
     func textContentStorage(
@@ -77,8 +78,7 @@ final nonisolated class ParagraphIndentRules: NSObject, NSTextContentStorageDele
     ) -> NSTextParagraph? {
         guard let storage = textContentStorage.textStorage,
               range.length > 0,
-              !Self.indents(paragraphStartingWith: storage.mutableString.character(at: range.location))
-              || Self.isUnindented(at: range.location, in: storage),
+              !Self.indents(paragraphAt: range.location, in: storage),
               let style = storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil)
               as? NSParagraphStyle,
               style.firstLineHeadIndent > 0,

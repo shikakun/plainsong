@@ -100,7 +100,9 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     override func synchronizeWindowTitleWithDocumentName() {
         super.synchronizeWindowTitleWithDocumentName()
         editorWindow.titleVisibility = (document as? NSDocument)?.fileURL == nil ? .hidden : .visible
-        applyMarkdown()
+        if markdownFlavor != markdownHighlighter.flavor {
+            applyMarkdown()
+        }
     }
 
     /// 書類の取り消しの履歴を使い、NSDocumentに変更を知らせる
@@ -141,10 +143,13 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
             applyFont(of: settings)
         }
         // 起動して「デフォルト」のままなら、システムの色のままなので何もしない
-        if settings.theme != previous?.theme ?? .standard {
+        let themeChanged = settings.theme != previous?.theme ?? .standard
+        if themeChanged {
             applyTheme(ThemeLibrary().theme(for: settings.theme))
         }
-        applyMarkdown()
+        if typesettingChanged || themeChanged || settings.highlightsMarkdown != previous?.highlightsMarkdown {
+            applyMarkdown()
+        }
         applyWhitespace(of: settings)
         applyLineNumbers(of: settings)
         observeClipViewFrame(settings.usesReadableWidth || settings.showsLineNumbers)
@@ -202,11 +207,15 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
-    /// `applyFont(of:)`と`applyTheme(_:)`が本文全体のフォントと色を上書きするので、そのあとに毎回呼ぶ
+    private var markdownFlavor: MarkdownSyntax.Flavor? {
+        guard settings?.highlightsMarkdown == true else { return nil }
+        return MarkdownSyntax.Flavor(url: (document as? NSDocument)?.fileURL)
+    }
+
+    /// `applyFont(of:)`と`applyTheme(_:)`が本文全体のフォントと色を上書きするので、そのあとに呼び直す
     private func applyMarkdown() {
         guard let settings else { return }
-        let flavor = settings.highlightsMarkdown ? MarkdownSyntax.Flavor(url: (document as? NSDocument)?.fileURL) : nil
-        markdownHighlighter.update(flavor: flavor, appearance: .init(settings: settings, theme: theme))
+        markdownHighlighter.update(flavor: markdownFlavor, appearance: .init(settings: settings, theme: theme))
     }
 
     private func applyWhitespace(of settings: EditorSettings) {

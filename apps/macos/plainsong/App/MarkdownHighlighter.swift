@@ -32,6 +32,10 @@ final class MarkdownHighlighter {
             markerColor = .secondaryLabelColor
             codeColor = theme?.palette[2] ?? .code
         }
+
+        var plainAttributes: [NSAttributedString.Key: Any] {
+            [.font: font, .foregroundColor: textColor]
+        }
     }
 
     static let styledKeys: Set<NSAttributedString.Key> = [.font, .foregroundColor]
@@ -77,8 +81,7 @@ final class MarkdownHighlighter {
         guard attributes[.markdownStyle] != nil, let appearance else { return attributes }
         var attributes = attributes
         attributes[.markdownStyle] = nil
-        attributes[.font] = appearance.font
-        attributes[.foregroundColor] = appearance.textColor
+        attributes.merge(appearance.plainAttributes) { $1 }
         return attributes
     }
 
@@ -120,7 +123,7 @@ final class MarkdownHighlighter {
         let runs = MarkdownSyntax.runs(in: range, of: string, blocks: blocks, flavor: flavor)
         storage.beginEditing()
         storage.removeAttribute(.markdownStyle, range: range)
-        storage.addAttributes([.font: appearance.font, .foregroundColor: appearance.textColor], range: range)
+        storage.addAttributes(appearance.plainAttributes, range: range)
         for run in runs {
             storage.addAttribute(.markdownStyle, value: run.style.rawValue, range: run.range)
             render(run.style, in: run.range, of: storage, appearance: appearance)
@@ -170,7 +173,7 @@ final class MarkdownHighlighter {
         storage.beginEditing()
         storage.enumerateAttribute(.markdownStyle, in: whole) { value, range, _ in
             guard value != nil else { return }
-            storage.addAttributes([.font: appearance.font, .foregroundColor: appearance.textColor], range: range)
+            storage.addAttributes(appearance.plainAttributes, range: range)
         }
         storage.removeAttribute(.markdownStyle, range: whole)
         storage.endEditing()

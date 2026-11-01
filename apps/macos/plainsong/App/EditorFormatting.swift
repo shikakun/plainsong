@@ -3,6 +3,7 @@ import AppKit
 extension EditorWindowController {
     /// applyFont(of:)とapplyTheme(_:)が本文全体に付ける属性
     private static let formattingKeys: [NSAttributedString.Key] = [.font, .paragraphStyle, .kern, .foregroundColor]
+    private static let unstyledFormattingKeys = formattingKeys.filter { !MarkdownHighlighter.styledKeys.contains($0) }
 
     @objc func undoManagerDidChange(_ notification: Notification) {
         guard let undoManager = (document as? NSDocument)?.undoManager,
@@ -20,9 +21,7 @@ extension EditorWindowController {
         let current = textView.typingAttributes
         var staleRanges: [(range: NSRange, keys: [NSAttributedString.Key])] = []
         storage.enumerateAttributes(in: NSRange(location: 0, length: storage.length)) { attributes, range, _ in
-            let keys = attributes[.markdownStyle] == nil
-                ? Self.formattingKeys
-                : Self.formattingKeys.filter { !MarkdownHighlighter.styledKeys.contains($0) }
+            let keys = attributes[.markdownStyle] == nil ? Self.formattingKeys : Self.unstyledFormattingKeys
             let isStale = keys.contains { key in
                 attributes[key] as? NSObject != current[key] as? NSObject
             }

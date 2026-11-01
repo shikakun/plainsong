@@ -215,10 +215,7 @@ extension EditorSettings {
             switch self {
             case .sansSerif:
                 // 日本語のフォールバック先としてOSが選ぶフォントは、全角を文字サイズの約0.92倍に縮めて描くので、明朝体と大きさが揃わない
-                let descriptor = font.fontDescriptor.addingAttributes([
-                    .cascadeList: [NSFontDescriptor(name: "HiraginoSans-W4", size: size)],
-                ])
-                return NSFont(descriptor: descriptor, size: size) ?? font
+                return Self.font(font.fontDescriptor, size: size, japanese: "HiraginoSans-W4") ?? font
             case .serif:
                 return font.fontDescriptor.withDesign(.serif).flatMap { NSFont(descriptor: $0, size: size) } ?? font
             }
@@ -226,23 +223,24 @@ extension EditorSettings {
 
         static func monospacedFont(ofSize size: CGFloat) -> NSFont {
             let font = NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
-            let descriptor = font.fontDescriptor.addingAttributes([
-                .cascadeList: [NSFontDescriptor(name: "HiraginoSans-W4", size: size)],
-            ])
-            return NSFont(descriptor: descriptor, size: size) ?? font
+            return Self.font(font.fontDescriptor, size: size, japanese: "HiraginoSans-W4") ?? font
         }
 
         /// OSに任せると和文が太字にならないことがあるので、ヒラギノの太いウェイトを指定する。明朝体にはW7がないのでW6にする
         func boldFont(ofSize size: CGFloat) -> NSFont {
             let font = NSFont.systemFont(ofSize: size, weight: .bold)
-            let (descriptor, japaneseName) = switch self {
+            let (descriptor, japanese) = switch self {
             case .sansSerif: (font.fontDescriptor, "HiraginoSans-W7")
             case .serif: (font.fontDescriptor.withDesign(.serif) ?? font.fontDescriptor, "HiraMinProN-W6")
             }
+            return Self.font(descriptor, size: size, japanese: japanese) ?? font
+        }
+
+        private static func font(_ descriptor: NSFontDescriptor, size: CGFloat, japanese name: String) -> NSFont? {
             let cascaded = descriptor.addingAttributes([
-                .cascadeList: [NSFontDescriptor(name: japaneseName, size: size)],
+                .cascadeList: [NSFontDescriptor(name: name, size: size)],
             ])
-            return NSFont(descriptor: cascaded, size: size) ?? font
+            return NSFont(descriptor: cascaded, size: size)
         }
     }
 

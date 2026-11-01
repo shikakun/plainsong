@@ -39,6 +39,8 @@ nonisolated enum MarkdownSyntax {
     private static let quoteMark = unichar(UInt8(ascii: ">"))
     private static let pipe = unichar(UInt8(ascii: "|"))
     private static let backslash = unichar(UInt8(ascii: "\\"))
+    private static let space = unichar(UInt8(ascii: " "))
+    private static let tab = unichar(UInt8(ascii: "\t"))
 
     static func blocks(in string: NSString) -> [Block] {
         var blocks: [Block] = []
@@ -82,7 +84,7 @@ nonisolated enum MarkdownSyntax {
                 blockIndex += 1
             }
             if blockIndex < blocks.endIndex, NSLocationInRange(line.location, blocks[blockIndex].range) {
-                addBlockLine(line, contents: contents, of: blocks[blockIndex], add: add)
+                addBlockLine(line, of: blocks[blockIndex], add: add)
             } else {
                 addLine(contents, of: string, flavor: flavor, add: add)
             }
@@ -100,12 +102,7 @@ nonisolated enum MarkdownSyntax {
         return runs
     }
 
-    private static func addBlockLine(
-        _ line: NSRange,
-        contents _: NSRange,
-        of block: Block,
-        add: (Style, NSRange) -> Void
-    ) {
+    private static func addBlockLine(_ line: NSRange, of block: Block, add: (Style, NSRange) -> Void) {
         let isFence = line.location == block.range.location
             || (NSMaxRange(line) == NSMaxRange(block.range) && block.isClosed)
         let style: Style = block.isFrontMatter ? [.marker, .monospaced] : isFence ? [.marker, .code] : .code
@@ -171,7 +168,7 @@ nonisolated enum MarkdownSyntax {
         add: (Style, NSRange) -> Void
     ) -> (codeSpans: [NSRange], tags: [NSRange]) {
         let codeSpans = addCodeSpans(in: range, of: string, add: add)
-        let isInCode = { (location: Int) in codeSpans.contains { NSLocationInRange(location, $0) } }
+        let isInCode = { (location: Int) in contains(location, in: codeSpans) }
         let isColumnSeparator = { (index: Int) in
             string.character(at: index) == pipe && !isInCode(index)
                 && (index == range.location || string.character(at: index - 1) != backslash)
@@ -192,9 +189,9 @@ nonisolated enum MarkdownSyntax {
             add(.marker, NSRange(NSMaxRange(content) ..< NSMaxRange(match.range)))
         }
         for match in matches(link) {
-            let text = match.range(at: 1)
-            add(.marker, NSRange(match.range.location ..< text.location))
-            add(.marker, NSRange(NSMaxRange(text) ..< NSMaxRange(match.range)))
+            let label = match.range(at: 1)
+            add(.marker, NSRange(match.range.location ..< label.location))
+            add(.marker, NSRange(NSMaxRange(label) ..< NSMaxRange(match.range)))
         }
         let tags = tag.matches(in: text, range: range).map(\.range).filter { match in
             !codeSpans.contains { NSIntersectionRange($0, match).length > 0 }
@@ -212,12 +209,16 @@ nonisolated enum MarkdownSyntax {
         tags: [NSRange]
     ) -> Bool {
         guard !codeSpans.isEmpty || !tags.isEmpty else { return false }
-        let text = (contents.location ..< NSMaxRange(contents)).filter { index in
+        let visible = (contents.location ..< NSMaxRange(contents)).filter { index in
             Unicode.Scalar(string.character(at: index)).map { !CharacterSet.whitespaces.contains($0) } ?? true
         }
-        let isIn = { (ranges: [NSRange], index: Int) in ranges.contains { NSLocationInRange(index, $0) } }
-        guard let first = text.first, let last = text.last else { return false }
-        return text.allSatisfy { isIn(codeSpans, $0) } || (isIn(tags, first) && isIn(tags, last))
+        guard let first = visible.first, let last = visible.last else { return false }
+        return visible.allSatisfy { contains($0, in: codeSpans) }
+            || (contains(first, in: tags) && contains(last, in: tags))
+    }
+
+    private static func contains(_ location: Int, in ranges: [NSRange]) -> Bool {
+        ranges.contains { NSLocationInRange(location, $0) }
     }
 
     private static func addCodeSpans(
@@ -283,7 +284,7 @@ nonisolated enum MarkdownSyntax {
     private static func fence(in contents: NSRange, of string: NSString) -> (fence: Fence, rest: NSRange)? {
         let end = NSMaxRange(contents)
         var index = contents.location
-        while index < end, [0x20, 0x09].contains(string.character(at: index)) {
+        while index < end, [space, tab].contains(string.character(at: index)) {
             index += 1
         }
         guard index < end else { return nil }
