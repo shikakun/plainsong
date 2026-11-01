@@ -152,7 +152,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             }
         }
         if placement.showsInMenuBar, menuBarIcon == nil {
-            menuBarIcon = MenuBarIcon { [weak self] in self?.showEditors() }
+            menuBarIcon = MenuBarIcon {
+                NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: .init())
+            }
         } else if !placement.showsInMenuBar, let menuBarIcon {
             menuBarIcon.remove()
             self.menuBarIcon = nil
@@ -160,10 +162,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     private func showEditors() {
-        if documents.hasVisibleEditors {
-            NSApp.activate()
+        let editorWindow = NSApp.orderedWindows.first { $0.isVisible && $0.windowController is EditorWindowController }
+        if let editorWindow {
+            editorWindow.makeKeyAndOrderFront(nil)
         } else {
-            showDrafts()
+            documents.showDrafts()
         }
     }
 
