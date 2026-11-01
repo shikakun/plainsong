@@ -20,4 +20,6 @@ Also, when Wrap to Readable Width is on, lines are no longer justified while you
 
 ## 1.0.0
 
-Plainsongを公開しました
+Plainsongを公開しました。
+
+Plainsong is live.
