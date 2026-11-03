@@ -157,10 +157,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         }
         applyWhitespace(of: settings)
         applyLineNumbers(of: settings)
-        // 縦書きは列の上下の余白が揃わず、テキストコンテナが高さを追わないので、いつも見張る
-        observeClipViewFrame(
-            settings.usesReadableWidth || settings.displaysLineNumbers || settings.orientation == .vertical
-        )
+        observeClipViewFrame(settings.usesReadableWidth || settings.displaysLineNumbers)
         applyToolbar(of: settings)
         applyStatusBar(of: settings)
         updateInsets()
@@ -391,8 +388,7 @@ extension EditorWindowController {
         }
     }
 
-    /// 行の方向の余白はテキストコンテナで、スクロールする方向の余白はクリップビューで空ける
-    /// ステータスバーの項目と歯車のアイコンは、本文の左右の端に揃える
+    /// 行の方向の余白はテキストコンテナで、交わる方向の余白はクリップビューで空け、ステータスバーの項目と歯車のアイコンを本文の左右の端に揃える
     private func updateInsets() {
         guard let settings else { return }
         let fontSize = settings.fontSize
@@ -411,21 +407,24 @@ extension EditorWindowController {
             minimumTrailing: minimumTrailing
         )
         let expansion = settings.crossInsetExpansion(trailing: trailing, minimumTrailing: minimumTrailing)
-        textView.setLineInsets(leading: leading, trailing: trailing, clipLength: clipLength)
         let gutter = settings.lineNumberWidth
         lineNumberView?.frame = NSRect(x: leading - gutter, y: 0, width: gutter, height: container.bounds.height)
         let sideInset = settings.minimumInset + expansion
         statusBar?.leadingInset = isVertical ? sideInset : leading
         statusBar?.trailingInset = isVertical ? sideInset : trailing
-        // 縦書きで上下の余白をクリップビューで空けると、テキストビューの高さが縮んで列が短くなる
-        setContentInsets(isVertical
-            ? NSEdgeInsets(top: 0, left: sideInset, bottom: 0, right: sideInset)
-            : NSEdgeInsets(top: topInset + expansion, left: 0, bottom: bottomInset + expansion, right: 0))
+        // 縦書きでは上下の最小の余白もクリップビューで空ける。テキストコンテナで空けると、テキストビューがタイトルバーの下に入り、ウィンドウを掴めなくなる
+        let clipInsets = isVertical
+            ? NSEdgeInsets(top: topInset, left: sideInset, bottom: bottomInset, right: sideInset)
+            : NSEdgeInsets(top: topInset + expansion, left: 0, bottom: bottomInset + expansion, right: 0)
+        let (before, after) = isVertical ? (clipInsets.top, clipInsets.bottom) : (0, 0)
+        let lineLength = clipLength - before - after
+        textView.setLineInsets(leading: leading - before, trailing: trailing - after, clipLength: lineLength)
+        setContentInsets(clipInsets)
         scrollView.scrollerInsets = NSEdgeInsets(top: 0, left: 0, bottom: statusBarHeight, right: 0)
     }
 
     /// クリップビューは余白を変えてもスクロールの位置を保つので、文書の先頭か末尾を見ているときは、変えた余白が見えるよう端に合わせ直す
-    /// 縦書きは右端が文書の先頭になる
+    /// 縦書きは右端が文書の先頭になり、縦にはスクロールしないので、上端はいつも余白に合わせる
     private func setContentInsets(_ insets: NSEdgeInsets) {
         let clipView = scrollView.contentView
         let previous = clipView.contentInsets
@@ -436,6 +435,7 @@ extension EditorWindowController {
         let size = textView.frame.size
         var origin = visible.origin
         if textView.layoutOrientation == .vertical {
+            origin.y = -insets.top
             if visible.maxX >= size.width + previous.right {
                 origin.x = size.width + insets.right - visible.width
             } else if visible.minX <= -previous.left {
