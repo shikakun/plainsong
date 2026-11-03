@@ -9,7 +9,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private let layoutManager: LineHeightSegmentLayoutManager
     /// レイアウトマネージャーはデリゲートを弱参照で持つので、ここで持っておく
     private let whitespaceMarkers = WhitespaceMarkers()
-    private let markdownHighlighter: MarkdownHighlighter
+    let markdownHighlighter: MarkdownHighlighter
+    let typesetter: JapaneseTypesetter
     private var selectionObservation: (any NSObjectProtocol)?
     private var clipViewFrameObservation: (any NSObjectProtocol)?
     /// ツールバーを含む高さ。全画面でタイトルバーが隠れても余白が変わらないよう、全画面のあいだは測り直さない
@@ -30,7 +31,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         didSet { statusBar?.lineEndingName = lineEnding.name }
     }
 
-    private var needsMixedLineEndingNotice = false
+    var needsMixedLineEndingNotice = false
 
     var textStorage: NSTextStorage? {
         textView.textStorage
@@ -45,8 +46,10 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         )
         (textView, layoutManager) = Self.makeTextView()
         markdownHighlighter = MarkdownHighlighter(textView: textView)
+        typesetter = JapaneseTypesetter(textView: textView)
         standardSelectedTextAttributes = textView.selectedTextAttributes
         super.init(window: editorWindow)
+        markdownHighlighter.didRestyle = { [weak typesetter] range in typesetter?.typeset(range) }
         editorWindow.delegate = self
         editorWindow.titleVisibility = .hidden
         editorWindow.titlebarAppearsTransparent = true
@@ -130,8 +133,12 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         guard settings != self.settings else { return }
         let previous = self.settings
         self.settings = settings
-        if settings.orientation != previous?.orientation ?? .horizontal {
+        let orientationChanged = settings.orientation != previous?.orientation ?? .horizontal
+        if orientationChanged {
             textView.discardMarkedTextIfNeeded()
+            // 縦書きで立てる英数は和文のフォントに差し替えるので、そのフォントが持つ行間で列が広がらないようにする
+            // 横書きでは、明朝体のベースラインが動くので使う
+            layoutManager.usesFontLeading = settings.orientation == .horizontal
             // NSTextViewが、スクローラーとテキストコンテナの向きも入れ替える
             textView.setLayoutOrientation(settings.orientation.layoutOrientation)
         }
@@ -155,6 +162,9 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         if typesettingChanged || themeChanged || settings.highlightsMarkdown != previous?.highlightsMarkdown {
             applyMarkdown()
         }
+        if typesettingChanged || orientationChanged {
+            typesetter.update(usesKerning: settings.usesKerning, isVertical: settings.orientation == .vertical)
+        }
         applyWhitespace(of: settings)
         applyLineNumbers(of: settings)
         observeClipViewFrame(settings.usesReadableWidth || settings.displaysLineNumbers)
@@ -176,19 +186,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         // defaultParagraphStyleは、変換を通さずに入力した文字には付かないので、入力する文字の属性に指定する
         textView.typingAttributes[.font] = font
         textView.typingAttributes[.paragraphStyle] = paragraphStyle
-        // 0を指定すると、欧文のカーニングに加えて、和文の約物の詰めと和欧間の空きも止まる
-        let kern: NSNumber? = settings.usesKerning ? nil : 0
-        textView.typingAttributes[.kern] = kern
         if let storage = textView.textStorage, storage.length > 0 {
-            let range = NSRange(location: 0, length: storage.length)
-            storage.beginEditing()
-            storage.addAttributes([.font: font, .paragraphStyle: paragraphStyle], range: range)
-            if let kern {
-                storage.addAttribute(.kern, value: kern, range: range)
-            } else {
-                storage.removeAttribute(.kern, range: range)
-            }
-            storage.endEditing()
+            storage.addAttributes(
+                [.font: font, .paragraphStyle: paragraphStyle],
+                range: NSRange(location: 0, length: storage.length)
+            )
         }
     }
 
@@ -450,51 +452,5 @@ extension EditorWindowController {
         guard origin != visible.origin else { return }
         clipView.scroll(to: origin)
         scrollView.reflectScrolledClipView(clipView)
-    }
-}
-
-extension EditorWindowController: NSTextViewDelegate {
-    func textView(
-        _: NSTextView,
-        shouldChangeTypingAttributes _: [String: Any],
-        toAttributes attributes: [NSAttributedString.Key: Any]
-    ) -> [NSAttributedString.Key: Any] {
-        markdownHighlighter.plainAttributes(attributes)
-    }
-
-    /// NSTextViewは、改行キーでいつも\nを入れる
-    func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
-        guard lineEnding != .lf,
-              selector == #selector(NSResponder.insertNewline(_:))
-              || selector == #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:))
-        else { return false }
-        textView.insertText(lineEnding.rawValue, replacementRange: NSRange(location: NSNotFound, length: 0))
-        return true
-    }
-
-    /// 状態の復元で後ろに開いたウィンドウでは気づけないので、ウィンドウがキーになるまで待つ
-    func noticeMixedLineEndings() {
-        needsMixedLineEndingNotice = true
-        presentMixedLineEndingNoticeIfNeeded()
-    }
-
-    func windowDidBecomeKey(_: Notification) {
-        presentMixedLineEndingNoticeIfNeeded()
-    }
-
-    private func presentMixedLineEndingNoticeIfNeeded() {
-        guard needsMixedLineEndingNotice, editorWindow.isKeyWindow, editorWindow.attachedSheet == nil else { return }
-        needsMixedLineEndingNotice = false
-        let suppressionKey = "suppressesMixedLineEndingNotice"
-        guard !UserDefaults.standard.bool(forKey: suppressionKey) else { return }
-        let alert = NSAlert()
-        alert.messageText = String(localized: "alert.mixedLineEndings.title")
-        alert.informativeText = String(localized: "alert.mixedLineEndings.message \(lineEnding.name)")
-        alert.showsSuppressionButton = true
-        alert.beginSheetModal(for: editorWindow) { _ in
-            if alert.suppressionButton?.state == .on {
-                UserDefaults.standard.set(true, forKey: suppressionKey)
-            }
-        }
     }
 }

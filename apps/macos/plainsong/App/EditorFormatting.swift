@@ -1,8 +1,8 @@
 import AppKit
 
 extension EditorWindowController {
-    /// applyFont(of:)とapplyTheme(_:)が本文全体に付ける属性
-    private static let formattingKeys: [NSAttributedString.Key] = [.font, .paragraphStyle, .kern, .foregroundColor]
+    /// applyFont(of:)とapplyTheme(_:)が本文全体に付ける属性。字間は、戻った文字を`JapaneseTypesetter`が組み直すので、ここでは直さない
+    private static let formattingKeys: [NSAttributedString.Key] = [.font, .paragraphStyle, .foregroundColor]
     private static let unstyledFormattingKeys = formattingKeys.filter { !MarkdownHighlighter.styledKeys.contains($0) }
 
     @objc func undoManagerDidChange(_ notification: Notification) {
@@ -21,9 +21,13 @@ extension EditorWindowController {
         let current = textView.typingAttributes
         var staleRanges: [(range: NSRange, keys: [NSAttributedString.Key])] = []
         storage.enumerateAttributes(in: NSRange(location: 0, length: storage.length)) { attributes, range, _ in
-            let keys = attributes[.markdownStyle] == nil ? Self.formattingKeys : Self.unstyledFormattingKeys
+            var keys = attributes[.markdownStyle] == nil ? Self.formattingKeys : Self.unstyledFormattingKeys
+            // 縦書きで立てるためにフォントを差し替えた文字は、覚えておいた元のフォントを直す。差し替えは`JapaneseTypesetter`が組み直す
+            if attributes[.uprightOriginalFont] != nil, let index = keys.firstIndex(of: .font) {
+                keys[index] = .uprightOriginalFont
+            }
             let isStale = keys.contains { key in
-                attributes[key] as? NSObject != current[key] as? NSObject
+                attributes[key] as? NSObject != current[Self.typingKey(for: key)] as? NSObject
             }
             if isStale {
                 staleRanges.append((range, keys))
@@ -33,7 +37,7 @@ extension EditorWindowController {
         storage.beginEditing()
         for (range, keys) in staleRanges {
             for key in keys {
-                if let value = current[key] {
+                if let value = current[Self.typingKey(for: key)] {
                     storage.addAttribute(key, value: value, range: range)
                 } else {
                     storage.removeAttribute(key, range: range)
@@ -41,5 +45,9 @@ extension EditorWindowController {
             }
         }
         storage.endEditing()
+    }
+
+    private static func typingKey(for key: NSAttributedString.Key) -> NSAttributedString.Key {
+        key == .uprightOriginalFont ? .font : key
     }
 }

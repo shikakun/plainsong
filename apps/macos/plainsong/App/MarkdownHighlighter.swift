@@ -47,6 +47,8 @@ final class MarkdownHighlighter {
     private var pendingRange: NSRange?
     private var pendingTask: Task<Void, Never>?
     private var editingObservation: (any NSObjectProtocol)?
+    /// 見出しなどのフォントを変えた範囲を知らせる。文字サイズで決まる字間を決め直すのに使う
+    var didRestyle: ((NSRange) -> Void)?
 
     init(textView: NSTextView) {
         self.textView = textView
@@ -129,6 +131,7 @@ final class MarkdownHighlighter {
             render(run.style, in: run.range, of: storage, appearance: appearance)
         }
         storage.endEditing()
+        didRestyle?(range)
     }
 
     private func render(_ storage: NSTextStorage) {
@@ -140,6 +143,7 @@ final class MarkdownHighlighter {
             render(MarkdownSyntax.Style(rawValue: value), in: range, of: storage, appearance: appearance)
         }
         storage.endEditing()
+        didRestyle?(whole)
     }
 
     private func render(
@@ -177,6 +181,7 @@ final class MarkdownHighlighter {
         }
         storage.removeAttribute(.markdownStyle, range: whole)
         storage.endEditing()
+        didRestyle?(whole)
     }
 
     static func range(_ range: NSRange, adjustedFor edited: NSRange, delta: Int) -> NSRange {

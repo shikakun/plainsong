@@ -89,7 +89,9 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
     }
 
     override func draw(at point: CGPoint, in context: CGContext) {
-        super.draw(at: point, in: context)
+        UprightGlyphs.draw(self, at: point, in: context) {
+            super.draw(at: point, in: context)
+        }
         guard markers.scope != nil || markers.showsNewlines,
               let attributedString = (textElement as? NSTextParagraph)?.attributedString
         else { return }
