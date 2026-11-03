@@ -83,6 +83,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         settingsModel.update { $0.lineSpacing = lineSpacing }
     }
 
+    @objc func selectOrientation(_ sender: NSMenuItem) {
+        guard let orientation = sender.representedObject as? EditorSettings.Orientation else { return }
+        settingsModel.update { $0.orientation = orientation }
+    }
+
     @objc func toggleSetting(_ sender: NSMenuItem) {
         guard let keyPath = sender.representedObject as? WritableKeyPath<EditorSettings, Bool> else { return }
         settingsModel.update { $0[keyPath: keyPath].toggle() }
@@ -112,9 +117,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             menuItem.state = menuItem.representedObject as? EditorSettings.LineSpacing == settings.lineSpacing
                 ? .on
                 : .off
+        case #selector(selectOrientation(_:)):
+            menuItem.state = menuItem.representedObject as? EditorSettings.Orientation == settings.orientation
+                ? .on
+                : .off
         case #selector(toggleSetting(_:)):
             guard let keyPath = menuItem.representedObject as? WritableKeyPath<EditorSettings, Bool> else { break }
             menuItem.state = settings[keyPath: keyPath] ? .on : .off
+            return settings.isAvailable(keyPath)
         default:
             break
         }

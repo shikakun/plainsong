@@ -92,15 +92,16 @@ final nonisolated class ParagraphIndentRules: NSObject, NSTextContentStorageDele
 }
 
 extension NSTextView {
-    /// textContainerInsetは左右に同じ幅しか空けられないので、テキストコンテナの幅で右の余白を決める
+    /// textContainerInsetは行の始めと終わりに同じ幅しか空けられないので、テキストコンテナの幅で終わりの余白を決める
+    /// テキストコンテナの座標は縦書きでも横書きと同じ向きのままなので、縦書きでは幅が列の長さになり、clipLengthにはクリップビューの高さを渡す
     /// ウィンドウの大きさを変えているあいだは何度も呼ばれるので、変わったときだけ渡す
-    func setHorizontalInsets(leading: CGFloat, trailing: CGFloat, clipWidth: CGFloat) {
+    func setLineInsets(leading: CGFloat, trailing: CGFloat, clipLength: CGFloat) {
         guard let textContainer else { return }
         let tracksWidth = leading == trailing
         if textContainer.widthTracksTextView != tracksWidth {
             textContainer.widthTracksTextView = tracksWidth
         }
-        let width = max(clipWidth - leading - trailing, 0)
+        let width = max(clipLength - leading - trailing, 0)
         if textContainer.size.width != width {
             textContainer.size = NSSize(width: width, height: textContainer.size.height)
         }

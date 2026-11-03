@@ -37,6 +37,7 @@ struct EditorSettings: Equatable {
     var fontFamily = FontFamily.sansSerif
     var fontSize: CGFloat = 16
     var lineSpacing = LineSpacing.standard
+    var orientation = Orientation.horizontal
     var usesKerning = false
     var usesReadableWidth = false
     var readableWidth = ReadableWidth.standard
@@ -70,6 +71,24 @@ struct EditorSettings: Equatable {
         statusBarItems.filter(\.isEnabled).map(\.kind)
     }
 
+    /// 行番号と、改行と空白の記号は、縦書きでは表示しない。設定の値は残し、横書きに戻すと表示する
+    func isAvailable(_ option: KeyPath<EditorSettings, Bool>) -> Bool {
+        orientation == .horizontal
+            || ![\EditorSettings.showsNewlines, \.showsWhitespace, \.showsLineNumbers].contains(option)
+    }
+
+    var displaysNewlines: Bool {
+        showsNewlines && isAvailable(\.showsNewlines)
+    }
+
+    var displaysWhitespace: Bool {
+        showsWhitespace && isAvailable(\.showsWhitespace)
+    }
+
+    var displaysLineNumbers: Bool {
+        showsLineNumbers && isAvailable(\.showsLineNumbers)
+    }
+
     func paragraphStyle(lineHeight: CGFloat) -> NSParagraphStyle {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.minimumLineHeight = lineHeight
@@ -86,6 +105,7 @@ struct EditorSettings: Equatable {
     private static let fontFamilyKey = "fontFamily"
     private static let fontSizeKey = "fontSize"
     private static let lineSpacingKey = "lineSpacing"
+    private static let orientationKey = "orientation"
     private static let usesKerningKey = "usesKerning"
     private static let usesReadableWidthKey = "usesReadableWidth"
     private static let readableWidthKey = "readableWidth"
@@ -118,6 +138,7 @@ struct EditorSettings: Equatable {
             settings.fontSize = fontSize
         }
         settings.lineSpacing = defaults.value(forKey: lineSpacingKey, default: settings.lineSpacing)
+        settings.orientation = defaults.value(forKey: orientationKey, default: settings.orientation)
         if let usesKerning = defaults.object(forKey: usesKerningKey) as? Bool {
             settings.usesKerning = usesKerning
         }
@@ -167,6 +188,7 @@ struct EditorSettings: Equatable {
         defaults.set(fontFamily.rawValue, forKey: Self.fontFamilyKey)
         defaults.set(Double(fontSize), forKey: Self.fontSizeKey)
         defaults.set(lineSpacing.rawValue, forKey: Self.lineSpacingKey)
+        defaults.set(orientation.rawValue, forKey: Self.orientationKey)
         defaults.set(usesKerning, forKey: Self.usesKerningKey)
         defaults.set(usesReadableWidth, forKey: Self.usesReadableWidthKey)
         defaults.set(readableWidth.rawValue, forKey: Self.readableWidthKey)
@@ -241,6 +263,25 @@ extension EditorSettings {
                 .cascadeList: [NSFontDescriptor(name: name, size: size)],
             ])
             return NSFont(descriptor: cascaded, size: size)
+        }
+    }
+
+    enum Orientation: String, CaseIterable {
+        case horizontal
+        case vertical
+
+        var layoutOrientation: NSLayoutManager.TextLayoutOrientation {
+            switch self {
+            case .horizontal: .horizontal
+            case .vertical: .vertical
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .horizontal: String(localized: "settings.orientation.horizontal")
+            case .vertical: String(localized: "settings.orientation.vertical")
+            }
         }
     }
 
@@ -380,16 +421,24 @@ extension EditorSettings {
         minimumInset * 2
     }
 
-    /// 読みやすい幅で折り返すときは、左右を揃えて本文を中央に置く。揃えると行番号が入らないときは、左を行番号の幅にする
-    func horizontalInsets(clipWidth: CGFloat) -> (leading: CGFloat, trailing: CGFloat) {
-        let minimumLeading = showsLineNumbers ? lineNumberWidth : minimumInset
-        guard usesReadableWidth else { return (minimumLeading, minimumInset) }
-        let maximumWidth = fontSize * readableWidth.ems
-        let centeringInset = ((clipWidth - maximumWidth) / 2).rounded(.down)
-        if centeringInset >= minimumLeading {
+    /// 行の始めと終わりの余白。読みやすい幅で折り返すときは、両端を揃えて本文を中央に置く。揃えるとどちらかが最小の余白に足りないときは、始めを最小の余白にする
+    func lineInsets(
+        clipLength: CGFloat,
+        minimumLeading: CGFloat,
+        minimumTrailing: CGFloat
+    ) -> (leading: CGFloat, trailing: CGFloat) {
+        guard usesReadableWidth else { return (minimumLeading, minimumTrailing) }
+        let maximumLength = fontSize * readableWidth.ems
+        let centeringInset = ((clipLength - maximumLength) / 2).rounded(.down)
+        if centeringInset >= max(minimumLeading, minimumTrailing) {
             return (centeringInset, centeringInset)
         }
-        return (minimumLeading, max(minimumInset, (clipWidth - maximumWidth - minimumLeading).rounded(.down)))
+        return (minimumLeading, max(minimumTrailing, (clipLength - maximumLength - minimumLeading).rounded(.down)))
+    }
+
+    /// 読みやすい幅で折り返して行の終わりの余白が広がるときは、行と交わる方向の余白も広げる
+    func crossInsetExpansion(trailing: CGFloat, minimumTrailing: CGFloat) -> CGFloat {
+        min((trailing - minimumTrailing) / 2, fontSize * 4).rounded(.down)
     }
 }
 

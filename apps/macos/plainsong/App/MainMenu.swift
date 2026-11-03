@@ -130,6 +130,9 @@ enum MainMenu {
         let lineSpacings = EditorSettings.LineSpacing.allCases.map { lineSpacing in
             choice(lineSpacing.title, #selector(AppDelegate.selectLineSpacing(_:)), lineSpacing)
         }
+        let orientations = EditorSettings.Orientation.allCases.map { orientation in
+            choice(orientation.title, #selector(AppDelegate.selectOrientation(_:)), orientation)
+        }
         return menu("menu.view", [
             submenu("settings.fontSize", [
                 item("menu.fontSize.bigger", #selector(AppDelegate.increaseFontSize(_:)), key: "+"),
@@ -138,6 +141,7 @@ enum MainMenu {
             ] + fontSizes),
             submenu("settings.lineSpacing", lineSpacings),
             submenu("settings.fontFamily", fontFamilies),
+            submenu("settings.orientation", orientations),
             .separator(),
             toggle("settings.kerning", \.usesKerning, key: "k"),
             toggle("settings.showsNewlines", \.showsNewlines, key: "l"),

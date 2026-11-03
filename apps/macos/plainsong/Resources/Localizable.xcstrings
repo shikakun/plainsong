@@ -1936,6 +1936,54 @@
         }
       }
     },
+    "settings.orientation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Orientation"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "組方向"
+          }
+        }
+      }
+    },
+    "settings.orientation.horizontal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Horizontal"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "横書き"
+          }
+        }
+      }
+    },
+    "settings.orientation.vertical" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vertical"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "縦書き"
+          }
+        }
+      }
+    },
     "settings.paragraphIndent" : {
       "localizations" : {
         "en" : {

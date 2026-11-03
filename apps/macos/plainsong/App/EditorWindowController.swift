@@ -130,6 +130,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         guard settings != self.settings else { return }
         let previous = self.settings
         self.settings = settings
+        if settings.orientation != previous?.orientation ?? .horizontal {
+            textView.discardMarkedTextIfNeeded()
+            // NSTextViewが、スクローラーとテキストコンテナの向きも入れ替える
+            textView.setLayoutOrientation(settings.orientation.layoutOrientation)
+        }
         let typesettingChanged = settings.fontFamily != previous?.fontFamily
             || settings.fontSize != previous?.fontSize
             || settings.lineSpacing != previous?.lineSpacing
@@ -152,7 +157,10 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         }
         applyWhitespace(of: settings)
         applyLineNumbers(of: settings)
-        observeClipViewFrame(settings.usesReadableWidth || settings.showsLineNumbers)
+        // 縦書きは列の上下の余白が揃わず、テキストコンテナが高さを追わないので、いつも見張る
+        observeClipViewFrame(
+            settings.usesReadableWidth || settings.displaysLineNumbers || settings.orientation == .vertical
+        )
         applyToolbar(of: settings)
         applyStatusBar(of: settings)
         updateInsets()
@@ -219,11 +227,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func applyWhitespace(of settings: EditorSettings) {
-        let scope = settings.showsWhitespace ? settings.whitespaceScope : nil
-        guard scope != whitespaceMarkers.scope || settings.showsNewlines != whitespaceMarkers.showsNewlines
+        let scope = settings.displaysWhitespace ? settings.whitespaceScope : nil
+        guard scope != whitespaceMarkers.scope || settings.displaysNewlines != whitespaceMarkers.showsNewlines
         else { return }
         whitespaceMarkers.scope = scope
-        whitespaceMarkers.showsNewlines = settings.showsNewlines
+        whitespaceMarkers.showsNewlines = settings.displaysNewlines
         if case .selection = scope {
             whitespaceMarkers.selectedRanges = textView.nonEmptySelectedRanges
             // 選択範囲が変わるのはメインスレッドだけなので、通知もメインスレッドで届く
@@ -260,11 +268,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func applyLineNumbers(of settings: EditorSettings) {
-        if settings.showsLineNumbers, lineNumberView == nil {
+        if settings.displaysLineNumbers, lineNumberView == nil {
             let lineNumberView = LineNumberView(textView: textView)
             container.addSubview(lineNumberView, positioned: .above, relativeTo: scrollView)
             self.lineNumberView = lineNumberView
-        } else if !settings.showsLineNumbers {
+        } else if !settings.displaysLineNumbers {
             lineNumberView?.removeFromSuperview()
             lineNumberView = nil
         }
@@ -383,46 +391,64 @@ extension EditorWindowController {
         }
     }
 
-    /// ステータスバーの項目と歯車のアイコンを、本文の左右の端に揃える
+    /// 行の方向の余白はテキストコンテナで、スクロールする方向の余白はクリップビューで空ける
+    /// ステータスバーの項目と歯車のアイコンは、本文の左右の端に揃える
     private func updateInsets() {
         guard let settings else { return }
         let fontSize = settings.fontSize
-        let clipWidth = scrollView.contentView.frame.width
-        let (leadingInset, trailingInset) = settings.horizontalInsets(clipWidth: clipWidth)
-        let verticalExpansion = min((trailingInset - settings.minimumInset) / 2, fontSize * 4).rounded(.down)
-        textView.setHorizontalInsets(leading: leadingInset, trailing: trailingInset, clipWidth: clipWidth)
-        let gutter = settings.lineNumberWidth
-        lineNumberView?.frame = NSRect(x: leadingInset - gutter, y: 0, width: gutter, height: container.bounds.height)
-        statusBar?.leadingInset = leadingInset
-        statusBar?.trailingInset = trailingInset
+        let clipSize = scrollView.contentView.frame.size
         let statusBarHeight = statusBar == nil ? 0 : StatusBar.height
-        setContentInsets(NSEdgeInsets(
-            top: titlebarHeight + fontSize + verticalExpansion,
-            left: 0,
-            bottom: max(statusBarHeight, fontSize) + fontSize + verticalExpansion,
-            right: 0
-        ))
+        let topInset = titlebarHeight + fontSize
+        let bottomInset = max(statusBarHeight, fontSize) + fontSize
+        let isVertical = settings.orientation == .vertical
+        let clipLength = isVertical ? clipSize.height : clipSize.width
+        let minimumLeading = isVertical ? topInset
+            : settings.displaysLineNumbers ? settings.lineNumberWidth : settings.minimumInset
+        let minimumTrailing = isVertical ? bottomInset : settings.minimumInset
+        let (leading, trailing) = settings.lineInsets(
+            clipLength: clipLength,
+            minimumLeading: minimumLeading,
+            minimumTrailing: minimumTrailing
+        )
+        let expansion = settings.crossInsetExpansion(trailing: trailing, minimumTrailing: minimumTrailing)
+        textView.setLineInsets(leading: leading, trailing: trailing, clipLength: clipLength)
+        let gutter = settings.lineNumberWidth
+        lineNumberView?.frame = NSRect(x: leading - gutter, y: 0, width: gutter, height: container.bounds.height)
+        let sideInset = settings.minimumInset + expansion
+        statusBar?.leadingInset = isVertical ? sideInset : leading
+        statusBar?.trailingInset = isVertical ? sideInset : trailing
+        // 縦書きで上下の余白をクリップビューで空けると、テキストビューの高さが縮んで列が短くなる
+        setContentInsets(isVertical
+            ? NSEdgeInsets(top: 0, left: sideInset, bottom: 0, right: sideInset)
+            : NSEdgeInsets(top: topInset + expansion, left: 0, bottom: bottomInset + expansion, right: 0))
         scrollView.scrollerInsets = NSEdgeInsets(top: 0, left: 0, bottom: statusBarHeight, right: 0)
     }
 
     /// クリップビューは余白を変えてもスクロールの位置を保つので、文書の先頭か末尾を見ているときは、変えた余白が見えるよう端に合わせ直す
+    /// 縦書きは右端が文書の先頭になる
     private func setContentInsets(_ insets: NSEdgeInsets) {
         let clipView = scrollView.contentView
         let previous = clipView.contentInsets
-        guard previous.top != insets.top || previous.bottom != insets.bottom else { return }
+        guard (previous.top, previous.left, previous.bottom, previous.right)
+            != (insets.top, insets.left, insets.bottom, insets.right)
+        else { return }
         let visible = clipView.bounds
-        let isAtTop = visible.minY <= -previous.top
-        let isAtBottom = visible.maxY >= textView.frame.height + previous.bottom
-        clipView.contentInsets = insets
-        let originY: CGFloat
-        if isAtTop {
-            originY = -insets.top
-        } else if isAtBottom {
-            originY = textView.frame.height + insets.bottom - visible.height
-        } else {
-            return
+        let size = textView.frame.size
+        var origin = visible.origin
+        if textView.layoutOrientation == .vertical {
+            if visible.maxX >= size.width + previous.right {
+                origin.x = size.width + insets.right - visible.width
+            } else if visible.minX <= -previous.left {
+                origin.x = -insets.left
+            }
+        } else if visible.minY <= -previous.top {
+            origin.y = -insets.top
+        } else if visible.maxY >= size.height + previous.bottom {
+            origin.y = size.height + insets.bottom - visible.height
         }
-        clipView.scroll(to: NSPoint(x: visible.minX, y: originY))
+        clipView.contentInsets = insets
+        guard origin != visible.origin else { return }
+        clipView.scroll(to: origin)
         scrollView.reflectScrolledClipView(clipView)
     }
 }
