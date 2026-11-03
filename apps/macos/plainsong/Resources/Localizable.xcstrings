@@ -2160,6 +2160,22 @@
         }
       }
     },
+    "settings.readableWidth.japaneseShort" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Japanese (about 20 characters)"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日本語の20字程度"
+          }
+        }
+      }
+    },
     "settings.readableWidth.standard" : {
       "localizations" : {
         "en" : {

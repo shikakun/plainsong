@@ -39,6 +39,17 @@ struct EditorSettingsTests {
     }
 
     @Test
+    func resolvesDefaultReadableWidthByOrientation() {
+        let horizontal: CGFloat = Bundle.main.preferredLocalizations.first == "ja" ? 40 : 29
+        #expect(EditorSettings.ReadableWidth.standard.ems(in: .horizontal) == horizontal)
+        #expect(EditorSettings.ReadableWidth.standard.ems(in: .vertical) == 20)
+        // 選んだ幅は、組方向に関係なく使う
+        #expect(EditorSettings.ReadableWidth.japaneseShort.ems(in: .horizontal) == 20)
+        #expect(EditorSettings.ReadableWidth.english.ems(in: .vertical) == 29)
+        #expect(EditorSettings.ReadableWidth.japanese.ems(in: .vertical) == 40)
+    }
+
+    @Test
     func keepsMinimumLeadingWhenCenteringDoesNotFit() {
         var settings = EditorSettings()
         settings.usesReadableWidth = true

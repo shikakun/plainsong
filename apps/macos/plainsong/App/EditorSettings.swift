@@ -312,12 +312,22 @@ extension EditorSettings {
         case standard
         case english
         case japanese
+        case japaneseShort
 
-        var ems: CGFloat {
+        /// 縦書きは和文を書くものとして、「デフォルト」を表示言語に関係なく20字にする
+        func ems(in orientation: Orientation) -> CGFloat {
             switch self {
-            case .standard: Bundle.main.preferredLocalizations.first == "ja" ? Self.japanese.ems : Self.english.ems
+            case .standard:
+                if orientation == .vertical {
+                    Self.japaneseShort.ems(in: orientation)
+                } else if Bundle.main.preferredLocalizations.first == "ja" {
+                    Self.japanese.ems(in: orientation)
+                } else {
+                    Self.english.ems(in: orientation)
+                }
             case .english: 29
             case .japanese: 40
+            case .japaneseShort: 20
             }
         }
 
@@ -326,6 +336,7 @@ extension EditorSettings {
             case .standard: String(localized: "settings.readableWidth.standard")
             case .english: String(localized: "settings.readableWidth.english")
             case .japanese: String(localized: "settings.readableWidth.japanese")
+            case .japaneseShort: String(localized: "settings.readableWidth.japaneseShort")
             }
         }
     }
@@ -428,7 +439,7 @@ extension EditorSettings {
         minimumTrailing: CGFloat
     ) -> (leading: CGFloat, trailing: CGFloat) {
         guard usesReadableWidth else { return (minimumLeading, minimumTrailing) }
-        let maximumLength = fontSize * readableWidth.ems
+        let maximumLength = fontSize * readableWidth.ems(in: orientation)
         let centeringInset = ((clipLength - maximumLength) / 2).rounded(.down)
         if centeringInset >= max(minimumLeading, minimumTrailing) {
             return (centeringInset, centeringInset)
