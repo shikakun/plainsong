@@ -1,14 +1,13 @@
 import AppKit
 
 extension NSAttributedString.Key {
-    /// 縦書きで立てる半角英数。値は`UprightGlyphs.Kind`
+    /// 値は`UprightGlyphs.Kind`のrawValue
     nonisolated static let uprightGlyphs = NSAttributedString.Key("PlainsongUprightGlyphs")
-    /// 立てるためにフォントを差し替えた文字の、元のフォント
     nonisolated static let uprightOriginalFont = NSAttributedString.Key("PlainsongUprightOriginalFont")
 }
 
-/// TextKitは縦書きの半角英数を横倒しに描くので、立てる文字は1文字分の升目で送るフォントに差し替えておき、
-/// 描くときに升目から元の字形を除いて、立てた字形を描き直す
+/// TextKitは縦書きの半角英数を横に倒して描くので、立てる文字は字送りが1字分のフォントに差し替え、
+/// 描くときに元の字形を消して立てた字形を描き直す
 nonisolated enum UprightGlyphs {
     enum Kind: Int {
         case upright = 1
@@ -21,16 +20,12 @@ nonisolated enum UprightGlyphs {
     }
 
     private struct Cell {
-        /// 元の描画を除く範囲。行の幅いっぱいに取る
         var band: CGRect
-        /// 文字を置く、文字サイズの正方形
         var square: CGRect
         var range: NSRange
         var kind: Kind
     }
 
-    /// 空白や和文で区切られた半角のまとまりごとに決め、記号を含むまとまりは横倒しのままにする
-    /// 2桁の数字は縦中横、1文字の英数と小文字を含まない英字は1字ずつ正立にする（JLREQ 3.2.3）
     static func runs(in string: NSString, range: NSRange) -> [Run] {
         var runs: [Run] = []
         var location = range.location
@@ -79,8 +74,7 @@ nonisolated enum UprightGlyphs {
         (0x61 ... 0x7A).contains(character)
     }
 
-    /// 立てる文字は、和文のフォントの全角の字形にして、送りを1文字分にする。縦中横の数字は半角の字形にして、2桁で1文字分にする
-    /// 字形の幅で送るので、カーソルや選択範囲も1文字分の升目に沿う
+    /// 字間で字送りを調整するとカーソルや選択範囲がずれるので、字送りが1字分の字形に差し替える
     static func font(for kind: Kind, replacing font: NSFont) -> NSFont {
         let japanese = CTFontCreateForString(font, "あ" as CFString, CFRange(location: 0, length: 1)) as NSFont
         let tag = kind == .tateChuYoko ? "hwid" : "fwid"
@@ -92,7 +86,7 @@ nonisolated enum UprightGlyphs {
         return NSFont(descriptor: descriptor, size: font.pointSize) ?? font
     }
 
-    /// 本文のフォントは字形の機能を指定しないので、指定があれば立てるために差し替えたフォント
+    /// 本文のフォントにはOpenType機能を指定しないので、指定があれば差し替えたフォントとみなす
     static func isReplacement(_ font: NSFont) -> Bool {
         font.fontDescriptor.object(forKey: .featureSettings) != nil
     }
@@ -133,7 +127,7 @@ nonisolated enum UprightGlyphs {
         var cells: [Cell] = []
         for line in fragment.textLineFragments {
             let bounds = line.typographicBounds.offsetBy(dx: point.x, dy: point.y)
-            // 縦書きでは、行の中心がglyphOriginの高さに来る
+            // 縦書きでは、行の中心がglyphOriginの高さにくる
             let center = bounds.minY + line.glyphOrigin.y
             paragraph.enumerateAttribute(.uprightGlyphs, in: line.characterRange) { value, range, _ in
                 guard let kind = (value as? Int).flatMap(Kind.init),
@@ -172,17 +166,13 @@ nonisolated enum UprightGlyphs {
             .font: attributes[.font] ?? NSFont.systemFont(ofSize: cell.square.height),
             NSAttributedString.Key(kCTForegroundColorFromContextAttributeName as String): true,
         ]))
-        // 和文の仮想ボディの中央に置くよう、字面の外形の中心を正方形の中心に合わせる。外形はベースラインの左端を原点に、上を正とする
         let ink = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
         let advance = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
         context.saveGState()
         context.translateBy(x: cell.square.midX, y: cell.square.midY)
-        // 座標は縦書きでも横書きの向きのままなので、表示で立つよう反対に回す
         context.rotate(by: -.pi / 2)
-        // 縦中横の数字は、1文字分の幅に収まらなければ縮める
         let side = min(cell.square.width, cell.square.height)
         let scale = cell.kind == .tateChuYoko ? min(1, side / max(advance, 1)) : 1
-        // 本文の座標は上下が反転しているので、Core Textの向きに戻す
         context.scaleBy(x: scale, y: -1)
         color.setFill()
         context.textMatrix = .identity
@@ -191,7 +181,6 @@ nonisolated enum UprightGlyphs {
         context.restoreGState()
     }
 
-    /// 検索の印などのレンダリング属性と、選択した文字の色。元の描画を除いた升目にも同じ色を付ける
     private struct Colors {
         private var backgrounds: [(NSRange, NSColor)] = []
         private var foregrounds: [(NSRange, NSColor)] = []
@@ -217,8 +206,8 @@ nonisolated enum UprightGlyphs {
                 }
                 return true
             }
-            // 選択した文字の色はレンダリング属性にないので、テキストビューの設定から付ける
-            // NSTextViewはメインスレッドで描くが、レイアウトフラグメントはスレッドを限らないので確かめる
+            // 選択した文字の色はrenderingAttributesに含まれないので、selectedTextAttributesから取る
+            // NSTextLayoutFragmentはメインスレッド以外で描かれることもあるので確かめる
             guard Thread.isMainThread,
                   let textView = layoutManager.textContainer?.textView,
                   let color = MainActor.assumeIsolated({ () -> NSColor? in

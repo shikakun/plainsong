@@ -16,7 +16,6 @@ struct EditorSettingsTests {
         #expect(!settings.displaysNewlines && !settings.displaysWhitespace && !settings.displaysLineNumbers)
         #expect(!settings.isAvailable(\.showsLineNumbers))
         #expect(settings.isAvailable(\.usesKerning))
-        // 設定の値は残す
         #expect(settings.showsNewlines && settings.showsWhitespace && settings.showsLineNumbers)
     }
 
@@ -32,7 +31,6 @@ struct EditorSettingsTests {
         var settings = EditorSettings()
         settings.usesReadableWidth = true
         settings.readableWidth = .japanese
-        // 16pt × 40字 = 640pt
         let insets = settings.lineInsets(clipLength: 1000, minimumLeading: 60, minimumTrailing: 40)
         #expect(insets == (180, 180))
         #expect(settings.crossInsetExpansion(trailing: insets.trailing, minimumTrailing: 40) == 64)
@@ -43,7 +41,6 @@ struct EditorSettingsTests {
         let horizontal: CGFloat = Bundle.main.preferredLocalizations.first == "ja" ? 40 : 29
         #expect(EditorSettings.ReadableWidth.standard.ems(in: .horizontal) == horizontal)
         #expect(EditorSettings.ReadableWidth.standard.ems(in: .vertical) == 20)
-        // 選んだ幅は、組方向に関係なく使う
         #expect(EditorSettings.ReadableWidth.japaneseShort.ems(in: .horizontal) == 20)
         #expect(EditorSettings.ReadableWidth.english.ems(in: .vertical) == 29)
         #expect(EditorSettings.ReadableWidth.japanese.ems(in: .vertical) == 40)
@@ -58,7 +55,6 @@ struct EditorSettingsTests {
         #expect(insets == (80, 40))
         let narrow = settings.lineInsets(clipLength: 600, minimumLeading: 80, minimumTrailing: 40)
         #expect(narrow == (80, 40))
-        // 終わりの最小の余白が始めより大きくても、両方の最小の余白を守る
         let tall = settings.lineInsets(clipLength: 800, minimumLeading: 40, minimumTrailing: 100)
         #expect(tall == (40, 120))
     }

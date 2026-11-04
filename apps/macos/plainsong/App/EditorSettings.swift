@@ -71,7 +71,6 @@ struct EditorSettings: Equatable {
         statusBarItems.filter(\.isEnabled).map(\.kind)
     }
 
-    /// 行番号と、改行と空白の記号は、縦書きでは表示しない。設定の値は残し、横書きに戻すと表示する
     func isAvailable(_ option: KeyPath<EditorSettings, Bool>) -> Bool {
         orientation == .horizontal
             || ![\EditorSettings.showsNewlines, \.showsWhitespace, \.showsLineNumbers].contains(option)
@@ -314,7 +313,6 @@ extension EditorSettings {
         case japanese
         case japaneseShort
 
-        /// 縦書きは和文を書くものとして、「デフォルト」を表示言語に関係なく20字にする
         func ems(in orientation: Orientation) -> CGFloat {
             switch self {
             case .standard:
@@ -432,7 +430,6 @@ extension EditorSettings {
         minimumInset * 2
     }
 
-    /// 行の始めと終わりの余白。読みやすい幅で折り返すときは、両端を揃えて本文を中央に置く。揃えるとどちらかが最小の余白に足りないときは、始めを最小の余白にする
     func lineInsets(
         clipLength: CGFloat,
         minimumLeading: CGFloat,
@@ -447,7 +444,6 @@ extension EditorSettings {
         return (minimumLeading, max(minimumTrailing, (clipLength - maximumLength - minimumLeading).rounded(.down)))
     }
 
-    /// 読みやすい幅で折り返して行の終わりの余白が広がるときは、行と交わる方向の余白も広げる
     func crossInsetExpansion(trailing: CGFloat, minimumTrailing: CGFloat) -> CGFloat {
         min((trailing - minimumTrailing) / 2, fontSize * 4).rounded(.down)
     }

@@ -14,11 +14,9 @@ struct UprightGlyphsTests {
     @Test
     func decidesRunsByToken() {
         #expect(runs("11月3日、GNPとMP3とA4とa") == ["11（縦中横）", "3", "GNP", "MP3", "A4", "a"])
-        // 小文字を含む英単語、3桁以上の数字、記号を含むまとまりは横倒しのまま
         #expect(runs("iPhoneと2026年と3.14と10%と11/3と!").isEmpty)
     }
 
-    /// 送りが1文字分になるので、カーソルや選択範囲も升目に沿う
     @Test
     func replacesFontsWithSquareAdvances() {
         for font in [
@@ -43,7 +41,6 @@ struct UprightGlyphsTests {
     func findsStopsWidenedInVertical() {
         let string = "あ、い。「う」、え。」お，A．" as NSString
         let indices = JapaneseTypesetter.widenedStops(in: string, range: NSRange(location: 0, length: string.length))
-        // 終わり括弧が続く句読点と、末尾の句読点は除く
         #expect(indices.map { string.substring(with: NSRange(location: $0, length: 2)) } == ["、い", "。「", "、え", "，A"])
     }
 }

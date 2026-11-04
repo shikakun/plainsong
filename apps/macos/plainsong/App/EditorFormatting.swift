@@ -1,7 +1,7 @@
 import AppKit
 
 extension EditorWindowController {
-    /// applyFont(of:)とapplyTheme(_:)が本文全体に付ける属性。字間は、戻った文字を`JapaneseTypesetter`が組み直すので、ここでは直さない
+    /// applyFont(of:)とapplyTheme(_:)が本文全体に指定した属性
     private static let formattingKeys: [NSAttributedString.Key] = [.font, .paragraphStyle, .foregroundColor]
     private static let unstyledFormattingKeys = formattingKeys.filter { !MarkdownHighlighter.styledKeys.contains($0) }
 
@@ -22,7 +22,6 @@ extension EditorWindowController {
         var staleRanges: [(range: NSRange, keys: [NSAttributedString.Key])] = []
         storage.enumerateAttributes(in: NSRange(location: 0, length: storage.length)) { attributes, range, _ in
             var keys = attributes[.markdownStyle] == nil ? Self.formattingKeys : Self.unstyledFormattingKeys
-            // 縦書きで立てるためにフォントを差し替えた文字は、覚えておいた元のフォントを直す。差し替えは`JapaneseTypesetter`が組み直す
             if attributes[.uprightOriginalFont] != nil, let index = keys.firstIndex(of: .font) {
                 keys[index] = .uprightOriginalFont
             }

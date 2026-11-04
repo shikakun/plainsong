@@ -47,7 +47,6 @@ final class MarkdownHighlighter {
     private var pendingRange: NSRange?
     private var pendingTask: Task<Void, Never>?
     private var editingObservation: (any NSObjectProtocol)?
-    /// 見出しなどのフォントを変えた範囲を知らせる。文字サイズで決まる字間を決め直すのに使う
     var didRestyle: ((NSRange) -> Void)?
 
     init(textView: NSTextView) {

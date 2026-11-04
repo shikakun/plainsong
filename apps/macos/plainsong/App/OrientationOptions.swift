@@ -9,7 +9,6 @@ final class OrientationOptions: NSObject {
     init(model: SettingsModel) {
         self.model = model
         super.init()
-        // 同じ親ビューにあって同じアクションを持つラジオボタンは、AppKitが1つのグループとして扱う
         for (index, radio) in radios.enumerated() {
             radio.tag = index
             radio.target = self

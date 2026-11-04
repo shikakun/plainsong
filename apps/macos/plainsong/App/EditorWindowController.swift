@@ -136,10 +136,9 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         let orientationChanged = settings.orientation != previous?.orientation ?? .horizontal
         if orientationChanged {
             textView.discardMarkedTextIfNeeded()
-            // 縦書きで立てる英数は和文のフォントに差し替えるので、そのフォントが持つ行間で列が広がらないようにする
-            // 横書きでは、明朝体のベースラインが動くので使う
+            // 縦書きでは、立てる英数に差し替えた和文のフォントの行間で行送りが広がるので、フォントの行間を使わない
+            // 横書きでは、使わないと明朝体のベースラインがずれる
             layoutManager.usesFontLeading = settings.orientation == .horizontal
-            // NSTextViewが、スクローラーとテキストコンテナの向きも入れ替える
             textView.setLayoutOrientation(settings.orientation.layoutOrientation)
         }
         let typesettingChanged = settings.fontFamily != previous?.fontFamily
@@ -390,7 +389,7 @@ extension EditorWindowController {
         }
     }
 
-    /// 行の方向の余白はテキストコンテナで、交わる方向の余白はクリップビューで空け、ステータスバーの項目と歯車のアイコンを本文の左右の端に揃える
+    /// ステータスバーの項目と歯車のアイコンを、本文の左右の端に揃える
     private func updateInsets() {
         guard let settings else { return }
         let fontSize = settings.fontSize
@@ -414,7 +413,7 @@ extension EditorWindowController {
         let sideInset = settings.minimumInset + expansion
         statusBar?.leadingInset = isVertical ? sideInset : leading
         statusBar?.trailingInset = isVertical ? sideInset : trailing
-        // 縦書きでは上下の最小の余白もクリップビューで空ける。テキストコンテナで空けると、テキストビューがタイトルバーの下に入り、ウィンドウを掴めなくなる
+        // 縦書きでは上下の余白もクリップビューで空ける。テキストコンテナで空けると、テキストビューがタイトルバーに重なってウィンドウをつかめなくなる
         let clipInsets = isVertical
             ? NSEdgeInsets(top: topInset, left: sideInset, bottom: bottomInset, right: sideInset)
             : NSEdgeInsets(top: topInset + expansion, left: 0, bottom: bottomInset + expansion, right: 0)
@@ -426,7 +425,6 @@ extension EditorWindowController {
     }
 
     /// クリップビューは余白を変えてもスクロールの位置を保つので、文書の先頭か末尾を見ているときは、変えた余白が見えるよう端に合わせ直す
-    /// 縦書きは右端が文書の先頭になり、縦にはスクロールしないので、上端はいつも余白に合わせる
     private func setContentInsets(_ insets: NSEdgeInsets) {
         let clipView = scrollView.contentView
         let previous = clipView.contentInsets

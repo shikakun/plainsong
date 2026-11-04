@@ -74,7 +74,6 @@ extension EditorWindowController {
             if rect.intersects(panelFrame) {
                 let clipView = scrollView.contentView
                 var bounds = clipView.bounds
-                // 縦書きは縦にスクロールできないので、結果をパネルの左へ逃がす
                 if textView.layoutOrientation == .vertical {
                     bounds.origin.x += rect.maxX - panelFrame.minX + rect.width
                 } else {

@@ -1,8 +1,6 @@
 import AppKit
 
-/// 本文の字間と、縦書きで立てる半角英数の属性を付ける。本文の字間はここだけが決める
-/// 和文の約物の詰めと和欧間の空きは、TextKitに任せる
-/// 属性の変更なので、TextStoreは記録せず、取り消しの履歴にも入らない
+/// 和文の約物の詰めと和欧間の空きはTextKitに任せる
 final class JapaneseTypesetter {
     private weak var textView: NSTextView?
     private var usesKerning = false
@@ -13,7 +11,7 @@ final class JapaneseTypesetter {
 
     init(textView: NSTextView) {
         self.textView = textView
-        // 本文はメインスレッドでしか変えないので、通知もメインスレッドで届く
+        // 本文はメインスレッドでしか変えないので、通知もメインスレッドで送られる
         editingObservation = NotificationCenter.default.addObserver(
             forName: NSTextStorage.didProcessEditingNotification,
             object: textView.textStorage,
@@ -36,7 +34,6 @@ final class JapaneseTypesetter {
         typeset(NSRange(location: 0, length: storage.length))
     }
 
-    /// 入力する文字は前の文字の属性を引き継ぐので、字間と、立てるために差し替えたフォントを戻す
     func plainAttributes(_ attributes: [NSAttributedString.Key: Any]) -> [NSAttributedString.Key: Any] {
         var attributes = attributes
         attributes[.kern] = baseKern
@@ -48,7 +45,6 @@ final class JapaneseTypesetter {
         return attributes
     }
 
-    /// `MarkdownHighlighter`が見出しなどのフォントを変えたあとにも呼ばれ、文字サイズに合わせて字間を決め直す
     func typeset(_ range: NSRange) {
         guard let storage = textView?.textStorage, storage.length > 0 else { return }
         let string = storage.string as NSString
@@ -87,7 +83,6 @@ final class JapaneseTypesetter {
         }
     }
 
-    /// `applyFont(of:)`や`MarkdownHighlighter`がフォントを付け直したところは、そのフォントを残す
     private func restoreOriginalFonts(in range: NSRange, of storage: NSTextStorage) {
         storage.enumerateAttribute(.uprightOriginalFont, in: range) { original, originalRange, _ in
             guard let original else { return }
@@ -101,8 +96,8 @@ final class JapaneseTypesetter {
         storage.removeAttribute(.uprightOriginalFont, range: range)
     }
 
-    /// 縦書きで字間をTextKitに任せると、句読点が1.5字分の幅になるので、字間を0にして1字分に戻す
-    /// 終わり括弧が続くところと段落の末尾では起きないので、TextKitの詰めを残す
+    /// 字間をTextKitに任せると、縦書きでは句読点が1.5字分に広がるので、字間を0にして1字分に戻す
+    /// 終わり括弧が続くところと段落の末尾では広がらないので、TextKitの詰めを残す
     nonisolated static func widenedStops(in string: NSString, range: NSRange) -> [Int] {
         guard range.length > 1 else { return [] }
         return (range.location ..< NSMaxRange(range) - 1).filter { index in
@@ -113,7 +108,6 @@ final class JapaneseTypesetter {
     private nonisolated static let stops = Set("、。，．".utf16)
     private nonisolated static let closingBrackets = Set("」』）〕］｝〉》】〙〗〟｠⦆".utf16)
 
-    /// Markdownのコードは、書いたとおりに読めるよう横倒しのままにする
     private func isCode(at location: Int, in storage: NSTextStorage) -> Bool {
         let style = storage.attribute(.markdownStyle, at: location, effectiveRange: nil) as? Int ?? 0
         return !MarkdownSyntax.Style(rawValue: style).isDisjoint(with: [.code, .monospaced])
