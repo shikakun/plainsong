@@ -6,6 +6,9 @@ final nonisolated class WhitespaceMarkers: NSObject, NSTextLayoutManagerDelegate
     var color = NSColor.tertiaryLabelColor
     /// 「選択範囲のみ」で使う、本文の先頭からの範囲
     var selectedRanges: [NSRange] = []
+    /// 本文の先頭からの範囲
+    var replacedRanges: [NSRange] = []
+    var replacedColor = NSColor.textInsertionPointColor
 
     func textLayoutManager(
         _: NSTextLayoutManager,
@@ -76,6 +79,7 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
     }
 
     /// 空の行は描ける範囲の幅がなく、改行の記号が切れるので、行の幅に記号1つ分を足した範囲まで広げる
+    /// 縦書きの傍線は列の外に出ることがあるので、列の右にあたる上にも広げる
     /// 描ける範囲は組むときに決まり、表示を切り替えても組み直さないので、オフのときも広げておく
     override var renderingSurfaceBounds: CGRect {
         let bounds = super.renderingSurfaceBounds
@@ -85,7 +89,13 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
               as? NSFont
         else { return bounds }
         let frame = layoutFragmentFrame
-        return bounds.union(CGRect(x: 0, y: 0, width: frame.width + font.pointSize, height: frame.height))
+        let overhang = font.pointSize / 4
+        return bounds.union(CGRect(
+            x: 0,
+            y: -overhang,
+            width: frame.width + font.pointSize,
+            height: frame.height + overhang
+        ))
     }
 
     private var isVertical: Bool {
@@ -96,19 +106,41 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
         UprightGlyphs.draw(self, at: point, in: context) {
             super.draw(at: point, in: context)
         }
-        guard markers.scope != nil || markers.showsNewlines,
+        guard markers.scope != nil || markers.showsNewlines || !markers.replacedRanges.isEmpty,
               let attributedString = (textElement as? NSTextParagraph)?.attributedString
         else { return }
 
         NSGraphicsContext.saveGraphicsState()
         defer { NSGraphicsContext.restoreGraphicsState() }
         NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
+        drawReplacedUnderlines(of: attributedString, at: point)
         markers.color.set()
         if let scope = markers.scope {
             drawWhitespace(of: attributedString, scope: scope, at: point, clip: context.boundingBoxOfClipPath)
         }
         if markers.showsNewlines {
             drawLineBreak(of: attributedString, at: point, in: context)
+        }
+    }
+
+    private func drawReplacedUnderlines(of attributedString: NSAttributedString, at point: CGPoint) {
+        let ranges = paragraphRanges(of: markers.replacedRanges)
+        guard !ranges.isEmpty else { return }
+        markers.replacedColor.setFill()
+        for line in textLineFragments {
+            let bounds = line.typographicBounds.offsetBy(dx: point.x, dy: point.y)
+            let origin = bounds.minY + line.glyphOrigin.y
+            for range in ranges {
+                guard let drawn = range.intersection(line.characterRange), drawn.length > 0,
+                      let font = attributedString.attribute(.font, at: drawn.location, effectiveRange: nil) as? NSFont
+                else { continue }
+                let minX = bounds.minX + line.locationForCharacter(at: drawn.location).x
+                let maxX = bounds.minX + line.locationForCharacter(at: NSMaxRange(drawn)).x
+                let thickness = font.underlineThickness * 2
+                // 縦書きでは、描くときの上が列の右になる。傍線は列の右に引くので、字面の外の上に置く
+                let top = isVertical ? origin - font.pointSize / 2 - thickness : origin - font.underlinePosition
+                CGRect(x: minX, y: top, width: maxX - minX, height: thickness).fill()
+            }
         }
     }
 
@@ -119,7 +151,7 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
         clip: CGRect
     ) {
         let string = attributedString.string as NSString
-        let selectedRanges = paragraphSelectedRanges(scope: scope)
+        let selectedRanges = paragraphRanges(of: markers.selectedRanges)
         if case .selection = scope, selectedRanges.isEmpty {
             return
         }
@@ -166,14 +198,14 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
         Self.drawPilcrow(at: minX, baseline: baseline, font: font)
     }
 
-    private func paragraphSelectedRanges(scope: EditorSettings.WhitespaceScope) -> [NSRange] {
-        guard case .selection = scope,
-              let contentManager = textLayoutManager?.textContentManager
+    /// NSTextLayoutFragmentはメインスレッド以外で描かれることもあるので、本文が編集されている最中に位置を求めないよう確かめる
+    private func paragraphRanges(of ranges: [NSRange]) -> [NSRange] {
+        guard !ranges.isEmpty, Thread.isMainThread, let contentManager = textLayoutManager?.textContentManager
         else { return [] }
         let location = contentManager.offset(from: contentManager.documentRange.location, to: rangeInElement.location)
         let length = contentManager.offset(from: rangeInElement.location, to: rangeInElement.endLocation)
         let paragraph = NSRange(location: location, length: length)
-        return markers.selectedRanges.compactMap { range in
+        return ranges.compactMap { range in
             guard let intersection = range.intersection(paragraph), intersection.length > 0 else { return nil }
             return NSRange(location: intersection.location - location, length: intersection.length)
         }
@@ -248,7 +280,6 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
         }
     }
 
-    /// 縦書きの本文では字形が横に倒れるので、記号は立てて描く
     private static func drawUprightPilcrow(at minX: CGFloat, middle: CGFloat, font: NSFont, in context: CGContext) {
         let size = font.pointSize
         context.saveGState()

@@ -66,29 +66,66 @@ extension EditorWindowController {
         textView.setSelectedRange(range)
     }
 
-    func showFindResult(_ range: NSRange, avoiding panelFrame: NSRect?) {
+    func showFindResult(_ range: NSRange, avoiding panel: NSWindow?) {
         textView.setSelectedRange(range)
         textView.scrollRangeToVisible(range)
-        if let panelFrame {
-            let rect = textView.firstRect(forCharacterRange: range, actualRange: nil)
-            if rect.intersects(panelFrame) {
-                let clipView = scrollView.contentView
-                var bounds = clipView.bounds
-                if textView.layoutOrientation == .vertical {
-                    bounds.origin.x += rect.maxX - panelFrame.minX + rect.width
-                } else {
-                    bounds.origin.y += rect.maxY - panelFrame.minY + rect.height
-                }
-                clipView.scroll(to: clipView.constrainBoundsRect(bounds).origin)
-                scrollView.reflectScrolledClipView(clipView)
-            }
+        if let panel {
+            uncoverFindResult(range, under: panel)
         }
         if range.length > 0 {
             textView.showFindIndicator(for: range)
         }
     }
 
-    /// 印はテキストの属性ではなくレンダリング属性で描くので、TextStoreは記録せず、取り消しの履歴にも入らない
+    /// 文書の端にある結果はスクロールしても動かせないので、パネルのほうを動かす
+    private func uncoverFindResult(_ range: NSRange, under panel: NSWindow) {
+        let rect = textView.firstRect(forCharacterRange: range, actualRange: nil)
+        guard rect.intersects(panel.frame), let window else { return }
+        let clipView = scrollView.contentView
+        let origin = clipView.bounds.origin
+        let isVertical = textView.layoutOrientation == .vertical
+        let visible = window.convertToScreen(window.contentLayoutRect)
+        let shifts = isVertical
+            ? Self.shifts(rect.minX ... rect.maxX, clearing: panel.frame.minX ... panel.frame.maxX, margin: rect.width)
+            : Self.shifts(rect.minY ... rect.maxY, clearing: panel.frame.minY ... panel.frame.maxY, margin: rect.height)
+        for shift in shifts {
+            var bounds = clipView.bounds
+            if isVertical {
+                bounds.origin.x -= shift
+            } else {
+                bounds.origin.y += shift
+            }
+            let target = clipView.constrainBoundsRect(bounds).origin
+            let moved = isVertical
+                ? rect.offsetBy(dx: origin.x - target.x, dy: 0)
+                : rect.offsetBy(dx: 0, dy: target.y - origin.y)
+            if !moved.intersects(panel.frame), visible.contains(moved) {
+                clipView.scroll(to: target)
+                scrollView.reflectScrolledClipView(clipView)
+                return
+            }
+        }
+        let screen = (panel.screen ?? window.screen)?.visibleFrame ?? .infinite
+        let frames = Self.shifts(panel.frame.minX ... panel.frame.maxX, clearing: rect.minX ... rect.maxX, margin: 0)
+            .map { (distance: abs($0), frame: panel.frame.offsetBy(dx: $0, dy: 0)) }
+            + Self.shifts(panel.frame.minY ... panel.frame.maxY, clearing: rect.minY ... rect.maxY, margin: 0)
+            .map { (distance: abs($0), frame: panel.frame.offsetBy(dx: 0, dy: $0)) }
+        if let frame = frames.filter({ screen.contains($0.frame) }).min(by: { $0.distance < $1.distance })?.frame {
+            panel.setFrameOrigin(frame.origin)
+        }
+    }
+
+    private static func shifts(
+        _ covered: ClosedRange<CGFloat>,
+        clearing cover: ClosedRange<CGFloat>,
+        margin: CGFloat
+    ) -> [CGFloat] {
+        [cover.lowerBound - covered.upperBound - margin, cover.upperBound - covered.lowerBound + margin]
+            .sorted { abs($0) < abs($1) }
+    }
+
+    /// 印はテキストの属性にしないので、TextStoreは記録せず、取り消しの履歴にも入らない
+    /// TextKit 2は描画用の属性の下線を描かないので、置換した箇所の下線はレイアウトフラグメントで描く
     func updateFindMarks(
         removing previous: [NSRange],
         results: [NSRange],
@@ -97,29 +134,23 @@ extension EditorWindowController {
         guard let layoutManager = textView.textLayoutManager else { return [] }
         for range in previous {
             guard let textRange = layoutManager.textRange(for: range) else { continue }
-            for key in [NSAttributedString.Key.backgroundColor, .underlineStyle, .underlineColor] {
-                layoutManager.removeRenderingAttribute(key, for: textRange)
-            }
+            layoutManager.removeRenderingAttribute(.backgroundColor, for: textRange)
         }
         let selection = textView.selectedTextAttributes[.backgroundColor] as? NSColor ?? .selectedTextBackgroundColor
-        var marked: [NSRange] = []
-        func mark(_ range: NSRange, _ attributes: [NSAttributedString.Key: Any]) {
-            guard range.length > 0, let textRange = layoutManager.textRange(for: range) else { return }
-            for (key, value) in attributes {
-                layoutManager.addRenderingAttribute(key, value: value, for: textRange)
-            }
-            marked.append(range)
+        let marked = results.filter { range in
+            guard range.length > 0, let textRange = layoutManager.textRange(for: range) else { return false }
+            layoutManager.addRenderingAttribute(
+                .backgroundColor,
+                value: selection.withAlphaComponent(0.45),
+                for: textRange
+            )
+            return true
         }
-        for range in results {
-            mark(range, [.backgroundColor: selection.withAlphaComponent(0.45)])
-        }
-        for range in replaced {
-            mark(range, [
-                .underlineStyle: NSUnderlineStyle.thick.rawValue,
-                .underlineColor: textView.insertionPointColor ?? .textInsertionPointColor,
-            ])
-        }
-        if !previous.isEmpty || !marked.isEmpty {
+        let replaced = replaced.filter { $0.length > 0 }
+        let replacedChanged = replaced != whitespaceMarkers.replacedRanges
+        whitespaceMarkers.replacedRanges = replaced
+        whitespaceMarkers.replacedColor = textView.insertionPointColor ?? .textInsertionPointColor
+        if !previous.isEmpty || !marked.isEmpty || replacedChanged {
             redrawText()
         }
         return marked

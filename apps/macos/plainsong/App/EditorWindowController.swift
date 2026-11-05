@@ -8,7 +8,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     let textView: NSTextView
     private let layoutManager: LineHeightSegmentLayoutManager
     /// レイアウトマネージャーはデリゲートを弱参照で持つので、ここで持っておく
-    private let whitespaceMarkers = WhitespaceMarkers()
+    let whitespaceMarkers = WhitespaceMarkers()
     let markdownHighlighter: MarkdownHighlighter
     let typesetter: JapaneseTypesetter
     private var selectionObservation: (any NSObjectProtocol)?
