@@ -168,11 +168,11 @@ final class LineNumberView: NSView {
         font bodyFont: NSFont
     ) {
         guard let range = NSTextRange(location: location, end: location) else { return }
-        layoutManager.enumerateTextSegments(in: range, type: .standard) { _, frame, _, _ in
+        layoutManager.enumerateTextSegments(in: range, type: .standard) { _, frame, baseline, _ in
             if textView.layoutOrientation == .vertical {
-                drawVerticalNumber(1, middle: frame.midY + origin.y)
+                drawVerticalNumber(1, middle: frame.minY + baseline + origin.y)
             } else {
-                drawNumber(1, baseline: frame.maxY + origin.y + bodyFont.descender, bodyFont: bodyFont)
+                drawNumber(1, baseline: frame.minY + baseline + origin.y, bodyFont: bodyFont)
             }
             return false
         }

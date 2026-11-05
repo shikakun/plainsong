@@ -182,6 +182,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         let lineHeight = Self.metrics.defaultLineHeight(for: sansSerif)
         let paragraphStyle = settings.paragraphStyle(lineHeight: lineHeight)
         layoutManager.lineHeight = lineHeight
+        let japanese = CTFontCreateForString(font, "あ" as CFString, CFRange(location: 0, length: 1)) as NSFont
+        layoutManager.japaneseMiddle = (japanese.ascender + japanese.descender) / 2
 
         // defaultParagraphStyleは、変換を通さずに入力した文字には付かないので、入力する文字の属性に指定する
         textView.typingAttributes[.font] = font
@@ -423,9 +425,15 @@ extension EditorWindowController {
         statusBar?.trailingInset = isVertical ? sideInset : trailing
         // 縦書きでは上の余白もクリップビューで空ける。テキストコンテナで空けると、テキストビューがタイトルバーに重なってウィンドウをつかめなくなる
         // 下の余白はテキストコンテナで空ける。テキストビューの外には描けないので、クリップビューで空けると行末の改行の記号が切れる
+        let overhang = LineHeightSegmentLayoutManager.bandOverhang
         let clipInsets = isVertical
-            ? NSEdgeInsets(top: topInset, left: sideInset, bottom: 0, right: sideInset)
-            : NSEdgeInsets(top: topInset + expansion, left: 0, bottom: bottomInset + expansion, right: 0)
+            ? NSEdgeInsets(top: topInset, left: sideInset - overhang, bottom: 0, right: sideInset - overhang)
+            : NSEdgeInsets(
+                top: topInset + expansion - overhang,
+                left: 0,
+                bottom: bottomInset + expansion - overhang,
+                right: 0
+            )
         let before = isVertical ? clipInsets.top : 0
         textView.setLineInsets(leading: leading - before, trailing: trailing, clipLength: clipLength - before)
         // 大きさが0のウィンドウで縦書きに組むと、テキストビューの原点が行末の余白の分だけずれ、横書きに切り替えても残る

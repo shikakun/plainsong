@@ -185,6 +185,66 @@ struct VerticalWritingTests {
         return longest
     }
 
+    @Test
+    func centersSelectionOnText() async throws {
+        for orientation in [EditorSettings.Orientation.horizontal, .vertical] {
+            for fontFamily in [EditorSettings.FontFamily.serif, .sansSerif] {
+                let editor = await makeEditor(String(repeating: "目", count: 300) + "\n\n次の段落") {
+                    $0.orientation = orientation
+                    $0.fontFamily = fontFamily
+                    $0.addsParagraphSpacing = false
+                }
+                try expectBandsCentered(in: editor.textView, isVertical: orientation == .vertical)
+            }
+        }
+    }
+
+    private func expectBandsCentered(in textView: NSTextView, isVertical: Bool) throws {
+        let manager = try #require(textView.textLayoutManager)
+        let start = manager.documentRange.location
+        manager.ensureLayout(for: manager.documentRange)
+
+        var bands: [CGRect] = []
+        manager.enumerateTextSegments(in: manager.documentRange, type: .selection) { _, frame, _, _ in
+            bands.append(frame)
+            return true
+        }
+        var centers: [CGFloat?] = []
+        manager.enumerateTextLayoutFragments(from: start, options: [.ensuresLayout]) { fragment in
+            let isEmpty = fragment.textLineFragments[0].characterRange.length <= 1
+            for line in fragment.textLineFragments {
+                let glyph = fragment.layoutFragmentFrame.minY + line.typographicBounds.minY + line.glyphOrigin.y
+                // ヒラギノの全角の字面の中心は、ベースラインから0.38字上にある
+                centers.append(isEmpty ? nil : glyph - (isVertical ? 0 : 0.38 * 16))
+            }
+            return true
+        }
+
+        #expect(bands.count == centers.count)
+        #expect(bands.count > 3)
+        for (band, center) in zip(bands, centers) {
+            #expect(band.height == bands[0].height)
+            if let center {
+                #expect(abs(band.midY - center) <= 0.5)
+            }
+        }
+        // 行間の扱いが違う空の行でも、帯は等間隔に並ぶ
+        #expect(Set(zip(bands, bands.dropFirst()).map { $1.minY - $0.minY }).count == 1)
+        // テキストビューの外には描けない
+        #expect(textView.textContainerOrigin.y + bands[0].minY >= 0)
+
+        // カーソルは1点の範囲で列挙するので、まとめて列挙したときと位置が揃うことを確かめる
+        let firstFragment = try #require(manager.textLayoutFragment(for: start))
+        let secondLine = firstFragment.textLineFragments[1].characterRange.location
+        let location = try #require(manager.textContentManager?.location(start, offsetBy: secondLine))
+        var caret: CGRect?
+        manager.enumerateTextSegments(in: NSTextRange(location: location), type: .standard) { _, frame, _, _ in
+            caret = frame
+            return false
+        }
+        #expect(caret?.minY == bands[1].minY)
+    }
+
     /// 文書の先頭にある結果は動かせないので、パネルのほうが避ける
     @Test
     func uncoversFindResultAtDocumentStart() async {
