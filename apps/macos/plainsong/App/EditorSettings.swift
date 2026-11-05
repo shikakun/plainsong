@@ -221,7 +221,9 @@ extension EditorSettings {
                 // 日本語のフォールバック先としてOSが選ぶフォントは、全角を文字サイズの約0.92倍に縮めて描くので、明朝体と大きさが揃わない
                 return Self.font(font.fontDescriptor, size: size, japanese: "HiraginoSans-W4") ?? font
             case .serif:
-                return font.fontDescriptor.withDesign(.serif).flatMap { NSFont(descriptor: $0, size: size) } ?? font
+                // 和文のフォールバック先はOSの言語設定で変わり、日本語以外では縦中横に必要なhwidを持たない宋体になる
+                let descriptor = font.fontDescriptor.withDesign(.serif) ?? font.fontDescriptor
+                return Self.font(descriptor, size: size, japanese: "HiraMinProN-W3") ?? font
             }
         }
 
