@@ -32,6 +32,11 @@ final nonisolated class TrailingNewlineContentStorage: NSTextContentStorage {
 final nonisolated class LineHeightSegmentLayoutManager: NSTextLayoutManager {
     var lineHeight: CGFloat = 0
 
+    /// 縦書きでは、行の中心がglyphOriginの高さにくる。空の行は、行間を文字の上に分けず行の高さに含めて組むので、下端から求める
+    func verticalMiddle(of line: NSTextLineFragment, in bounds: CGRect, isEmpty: Bool) -> CGFloat {
+        (isEmpty ? bounds.maxY - lineHeight : bounds.minY) + line.glyphOrigin.y
+    }
+
     override func enumerateTextSegments(
         in textRange: NSTextRange,
         type: NSTextLayoutManager.SegmentType,

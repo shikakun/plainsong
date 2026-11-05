@@ -88,6 +88,10 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
         return bounds.union(CGRect(x: 0, y: 0, width: frame.width + font.pointSize, height: frame.height))
     }
 
+    private var isVertical: Bool {
+        textLayoutManager?.textContainer?.layoutOrientation == .vertical
+    }
+
     override func draw(at point: CGPoint, in context: CGContext) {
         UprightGlyphs.draw(self, at: point, in: context) {
             super.draw(at: point, in: context)
@@ -104,7 +108,7 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
             drawWhitespace(of: attributedString, scope: scope, at: point, clip: context.boundingBoxOfClipPath)
         }
         if markers.showsNewlines {
-            drawLineBreak(of: attributedString, at: point)
+            drawLineBreak(of: attributedString, at: point, in: context)
         }
     }
 
@@ -133,23 +137,33 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
                 else { continue }
                 let minX = bounds.minX + line.locationForCharacter(at: index).x
                 let maxX = bounds.minX + line.locationForCharacter(at: index + 1).x
-                let baseline = bounds.minY + line.glyphOrigin.y
-                Self.drawMarker(for: string.character(at: index), from: minX, to: maxX, baseline: baseline, font: font)
+                let origin = bounds.minY + line.glyphOrigin.y
+                // 縦書きでは、行の中心がglyphOriginの高さにくる
+                let middle = isVertical
+                    ? (halfWidth: origin, fullWidth: origin)
+                    : (halfWidth: origin - font.xHeight / 2, fullWidth: origin - font.capHeight / 2)
+                Self.drawMarker(for: string.character(at: index), from: minX, to: maxX, middle: middle, font: font)
             }
         }
     }
 
-    private func drawLineBreak(of attributedString: NSAttributedString, at point: CGPoint) {
+    private func drawLineBreak(of attributedString: NSAttributedString, at point: CGPoint, in context: CGContext) {
         guard let index = WhitespaceMarkers.lineBreakStart(in: attributedString.string as NSString),
               let line = textLineFragments.last(where: { $0.characterRange.location <= index }),
               let font = attributedString.attribute(.font, at: index, effectiveRange: nil) as? NSFont
         else { return }
         let bounds = line.typographicBounds.offsetBy(dx: point.x, dy: point.y)
+        let isEmpty = index == line.characterRange.location
+        let minX = bounds.minX + line.locationForCharacter(at: index).x
+        if isVertical {
+            guard let layoutManager = textLayoutManager as? LineHeightSegmentLayoutManager else { return }
+            let middle = layoutManager.verticalMiddle(of: line, in: bounds, isEmpty: isEmpty)
+            Self.drawUprightPilcrow(at: minX, middle: middle, font: font, in: context)
+            return
+        }
         // 空の行は、行間を文字の上に分けず行の高さに含めて組むので、ベースラインを下端から求める
-        let baseline = index == line.characterRange.location
-            ? bounds.maxY + font.descender
-            : bounds.minY + line.glyphOrigin.y
-        Self.drawPilcrow(at: bounds.minX + line.locationForCharacter(at: index).x, baseline: baseline, font: font)
+        let baseline = isEmpty ? bounds.maxY + font.descender : bounds.minY + line.glyphOrigin.y
+        Self.drawPilcrow(at: minX, baseline: baseline, font: font)
     }
 
     private func paragraphSelectedRanges(scope: EditorSettings.WhitespaceScope) -> [NSRange] {
@@ -169,14 +183,14 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
         for character: unichar,
         from minX: CGFloat,
         to maxX: CGFloat,
-        baseline: CGFloat,
+        middle: (halfWidth: CGFloat, fullWidth: CGFloat),
         font: NSFont
     ) {
         let size = font.pointSize
         let lineWidth = size / 16
         let width = maxX - minX
         let midX = minX + width / 2
-        let midY = baseline - font.xHeight / 2
+        let midY = middle.halfWidth
         let halfWidth = min(size / 8, width * 0.4)
         switch character {
         case 0x20, 0xA0, 0x2007, 0x202F:
@@ -201,7 +215,7 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
             let side = width * 0.6
             let rect = CGRect(
                 x: minX + (width - side) / 2,
-                y: baseline - font.capHeight / 2 - side / 2,
+                y: middle.fullWidth - side / 2,
                 width: side,
                 height: side
             )
@@ -232,6 +246,17 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
             path.lineCapStyle = .round
             path.stroke()
         }
+    }
+
+    /// 縦書きの本文では字形が横に倒れるので、記号は立てて描く
+    private static func drawUprightPilcrow(at minX: CGFloat, middle: CGFloat, font: NSFont, in context: CGContext) {
+        let size = font.pointSize
+        context.saveGState()
+        defer { context.restoreGState() }
+        context.translateBy(x: minX + size / 8 + font.capHeight / 2, y: middle)
+        context.rotate(by: -.pi / 2)
+        // 字形の幅の中央を列の中心に揃える
+        drawPilcrow(at: -size * 0.31, baseline: font.capHeight / 2, font: font)
     }
 
     private static func drawPilcrow(at minX: CGFloat, baseline: CGFloat, font: NSFont) {
