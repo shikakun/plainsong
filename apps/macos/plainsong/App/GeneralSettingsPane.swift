@@ -231,10 +231,6 @@ final class GeneralSettingsPane: SettingsPane {
         whitespaceCheckbox.state = settings.showsWhitespace ? .on : .off
         whitespaceScopeButton.selectItem(for: settings.whitespaceScope)
         lineNumbersCheckbox.state = settings.showsLineNumbers ? .on : .off
-        newlinesCheckbox.isEnabled = settings.isAvailable(\.showsNewlines)
-        whitespaceCheckbox.isEnabled = settings.isAvailable(\.showsWhitespace)
-        whitespaceScopeButton.isEnabled = settings.isAvailable(\.showsWhitespace)
-        lineNumbersCheckbox.isEnabled = settings.isAvailable(\.showsLineNumbers)
         paragraphSpacingCheckbox.state = settings.addsParagraphSpacing ? .on : .off
         paragraphSpacingButton.selectItem(for: settings.paragraphSpacing)
         paragraphIndentCheckbox.state = settings.indentsParagraphs ? .on : .off

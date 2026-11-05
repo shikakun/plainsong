@@ -5,21 +5,6 @@ import Testing
 @Suite
 struct EditorSettingsTests {
     @Test
-    func hidesLineNumbersAndMarkersInVerticalOrientation() {
-        var settings = EditorSettings()
-        settings.showsNewlines = true
-        settings.showsWhitespace = true
-        settings.showsLineNumbers = true
-        #expect(settings.displaysNewlines && settings.displaysWhitespace && settings.displaysLineNumbers)
-
-        settings.orientation = .vertical
-        #expect(!settings.displaysNewlines && !settings.displaysWhitespace && !settings.displaysLineNumbers)
-        #expect(!settings.isAvailable(\.showsLineNumbers))
-        #expect(settings.isAvailable(\.usesKerning))
-        #expect(settings.showsNewlines && settings.showsWhitespace && settings.showsLineNumbers)
-    }
-
-    @Test
     func usesMinimumLineInsetsWithoutReadableWidth() {
         let settings = EditorSettings()
         let insets = settings.lineInsets(clipLength: 2000, minimumLeading: 60, minimumTrailing: 40)

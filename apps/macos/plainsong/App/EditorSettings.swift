@@ -71,23 +71,6 @@ struct EditorSettings: Equatable {
         statusBarItems.filter(\.isEnabled).map(\.kind)
     }
 
-    func isAvailable(_ option: KeyPath<EditorSettings, Bool>) -> Bool {
-        orientation == .horizontal
-            || ![\EditorSettings.showsNewlines, \.showsWhitespace, \.showsLineNumbers].contains(option)
-    }
-
-    var displaysNewlines: Bool {
-        showsNewlines && isAvailable(\.showsNewlines)
-    }
-
-    var displaysWhitespace: Bool {
-        showsWhitespace && isAvailable(\.showsWhitespace)
-    }
-
-    var displaysLineNumbers: Bool {
-        showsLineNumbers && isAvailable(\.showsLineNumbers)
-    }
-
     func paragraphStyle(lineHeight: CGFloat) -> NSParagraphStyle {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.minimumLineHeight = lineHeight
@@ -426,7 +409,8 @@ extension EditorSettings {
         fontSize * 2
     }
 
-    var lineNumberWidth: CGFloat {
+    /// 横書きでは番号を置く列の幅、縦書きでは列の上で番号を置く帯の高さ
+    var lineNumberGutter: CGFloat {
         minimumInset * 2
     }
 

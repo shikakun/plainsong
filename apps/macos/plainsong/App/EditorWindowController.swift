@@ -166,7 +166,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         }
         applyWhitespace(of: settings)
         applyLineNumbers(of: settings)
-        observeClipViewFrame(settings.usesReadableWidth || settings.displaysLineNumbers)
+        observeClipViewFrame(settings.usesReadableWidth || settings.showsLineNumbers)
         applyToolbar(of: settings)
         applyStatusBar(of: settings)
         updateInsets()
@@ -225,11 +225,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func applyWhitespace(of settings: EditorSettings) {
-        let scope = settings.displaysWhitespace ? settings.whitespaceScope : nil
-        guard scope != whitespaceMarkers.scope || settings.displaysNewlines != whitespaceMarkers.showsNewlines
+        let scope = settings.showsWhitespace ? settings.whitespaceScope : nil
+        guard scope != whitespaceMarkers.scope || settings.showsNewlines != whitespaceMarkers.showsNewlines
         else { return }
         whitespaceMarkers.scope = scope
-        whitespaceMarkers.showsNewlines = settings.displaysNewlines
+        whitespaceMarkers.showsNewlines = settings.showsNewlines
         if case .selection = scope {
             whitespaceMarkers.selectedRanges = textView.nonEmptySelectedRanges
             // 選択範囲が変わるのはメインスレッドだけなので、通知もメインスレッドで届く
@@ -266,11 +266,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func applyLineNumbers(of settings: EditorSettings) {
-        if settings.displaysLineNumbers, lineNumberView == nil {
+        if settings.showsLineNumbers, lineNumberView == nil {
             let lineNumberView = LineNumberView(textView: textView)
             container.addSubview(lineNumberView, positioned: .above, relativeTo: scrollView)
             self.lineNumberView = lineNumberView
-        } else if !settings.displaysLineNumbers {
+        } else if !settings.showsLineNumbers {
             lineNumberView?.removeFromSuperview()
             lineNumberView = nil
         }
@@ -399,8 +399,12 @@ extension EditorWindowController {
         let bottomInset = max(statusBarHeight, fontSize) + fontSize
         let isVertical = settings.orientation == .vertical
         let clipLength = isVertical ? clipSize.height : clipSize.width
-        let minimumLeading = isVertical ? topInset
-            : settings.displaysLineNumbers ? settings.lineNumberWidth : settings.minimumInset
+        let gutter = settings.lineNumberGutter
+        let minimumLeading = if isVertical {
+            settings.showsLineNumbers ? topInset + gutter : topInset
+        } else {
+            settings.showsLineNumbers ? gutter : settings.minimumInset
+        }
         let minimumTrailing = isVertical ? bottomInset : settings.minimumInset
         let (leading, trailing) = settings.lineInsets(
             clipLength: clipLength,
@@ -408,18 +412,23 @@ extension EditorWindowController {
             minimumTrailing: minimumTrailing
         )
         let expansion = settings.crossInsetExpansion(trailing: trailing, minimumTrailing: minimumTrailing)
-        let gutter = settings.lineNumberWidth
-        lineNumberView?.frame = NSRect(x: leading - gutter, y: 0, width: gutter, height: container.bounds.height)
+        lineNumberView?.frame = isVertical
+            ? NSRect(x: 0, y: container.bounds.height - leading, width: container.bounds.width, height: gutter)
+            : NSRect(x: leading - gutter, y: 0, width: gutter, height: container.bounds.height)
         let sideInset = settings.minimumInset + expansion
         statusBar?.leadingInset = isVertical ? sideInset : leading
         statusBar?.trailingInset = isVertical ? sideInset : trailing
-        // 縦書きでは上下の余白もクリップビューで空ける。テキストコンテナで空けると、テキストビューがタイトルバーに重なってウィンドウをつかめなくなる
+        // 縦書きでは上の余白もクリップビューで空ける。テキストコンテナで空けると、テキストビューがタイトルバーに重なってウィンドウをつかめなくなる
+        // 下の余白はテキストコンテナで空ける。テキストビューの外には描けないので、クリップビューで空けると行末の改行の記号が切れる
         let clipInsets = isVertical
-            ? NSEdgeInsets(top: topInset, left: sideInset, bottom: bottomInset, right: sideInset)
+            ? NSEdgeInsets(top: topInset, left: sideInset, bottom: 0, right: sideInset)
             : NSEdgeInsets(top: topInset + expansion, left: 0, bottom: bottomInset + expansion, right: 0)
-        let (before, after) = isVertical ? (clipInsets.top, clipInsets.bottom) : (0, 0)
-        let lineLength = clipLength - before - after
-        textView.setLineInsets(leading: leading - before, trailing: trailing - after, clipLength: lineLength)
+        let before = isVertical ? clipInsets.top : 0
+        textView.setLineInsets(leading: leading - before, trailing: trailing, clipLength: clipLength - before)
+        // 大きさが0のウィンドウで縦書きに組むと、テキストビューの原点が行末の余白の分だけずれ、横書きに切り替えても残る
+        if textView.frame.origin != .zero {
+            textView.setFrameOrigin(.zero)
+        }
         setContentInsets(clipInsets)
         scrollView.scrollerInsets = NSEdgeInsets(top: 0, left: 0, bottom: statusBarHeight, right: 0)
     }

@@ -124,7 +124,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         case #selector(toggleSetting(_:)):
             guard let keyPath = menuItem.representedObject as? WritableKeyPath<EditorSettings, Bool> else { break }
             menuItem.state = settings[keyPath: keyPath] ? .on : .off
-            return settings.isAvailable(keyPath)
         default:
             break
         }
