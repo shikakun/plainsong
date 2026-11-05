@@ -6,7 +6,7 @@ extension EditorWindowController: NSTextViewDelegate {
         shouldChangeTypingAttributes _: [String: Any],
         toAttributes attributes: [NSAttributedString.Key: Any]
     ) -> [NSAttributedString.Key: Any] {
-        typesetter.plainAttributes(markdownHighlighter.plainAttributes(attributes))
+        markdownHighlighter.plainAttributes(typesetter.plainAttributes(attributes))
     }
 
     /// NSTextViewは、改行キーでいつも\nを入れる

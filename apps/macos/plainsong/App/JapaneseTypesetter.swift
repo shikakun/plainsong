@@ -1,24 +1,13 @@
 import AppKit
 
-/// 和文の約物の詰めと和欧間の空きはTextKitに任せる
 final class JapaneseTypesetter {
     private weak var textView: NSTextView?
     private var usesKerning = false
     private var isVertical = false
-    private var pendingRange: NSRange?
-    private var pendingTask: Task<Void, Never>?
-    private var editingObservation: (any NSObjectProtocol)?
+    private var replacements: [UprightGlyphs.Kind: [NSFont: NSFont]] = [:]
 
     init(textView: NSTextView) {
         self.textView = textView
-        // 本文はメインスレッドでしか変えないので、通知もメインスレッドで送られる
-        editingObservation = NotificationCenter.default.addObserver(
-            forName: NSTextStorage.didProcessEditingNotification,
-            object: textView.textStorage,
-            queue: nil
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.storageDidProcessEditing() }
-        }
     }
 
     /// 0を指定すると、欧文のカーニングに加えて、和文の約物の詰めと和欧間の空きも止まる
@@ -29,6 +18,7 @@ final class JapaneseTypesetter {
     func update(usesKerning: Bool, isVertical: Bool) {
         self.usesKerning = usesKerning
         self.isVertical = isVertical
+        replacements.removeAll()
         textView?.typingAttributes[.kern] = baseKern
         guard let storage = textView?.textStorage else { return }
         typeset(NSRange(location: 0, length: storage.length))
@@ -42,58 +32,105 @@ final class JapaneseTypesetter {
         }
         attributes[.uprightGlyphs] = nil
         attributes[.uprightOriginalFont] = nil
+        attributes[.verticalGlyphForm] = nil
         return attributes
     }
 
     func typeset(_ range: NSRange) {
-        guard let storage = textView?.textStorage, storage.length > 0 else { return }
-        let string = storage.string as NSString
+        guard let textView, let storage = textView.textStorage, storage.length > 0 else { return }
+        let string = storage.mutableString
         let range = string.paragraphRange(for: NSIntersectionRange(range, NSRange(location: 0, length: storage.length)))
+        // 未確定の文字を組むと、打鍵のたびに向きと字送りが変わる。確定すると本文の編集としてまた呼ばれる
+        let composing = textView.hasMarkedText() ? textView.markedRange() : nil
         storage.beginEditing()
-        if let baseKern {
-            storage.addAttribute(.kern, value: baseKern, range: range)
-        } else {
-            storage.removeAttribute(.kern, range: range)
-        }
-        restoreOriginalFonts(in: range, of: storage)
-        string.enumerateSubstrings(in: range, options: [.byParagraphs, .substringNotRequired]) { _, paragraph, _, _ in
-            self.typesetParagraph(paragraph, of: string, in: storage)
+        let options: NSString.EnumerationOptions = [.byParagraphs, .substringNotRequired]
+        string.enumerateSubstrings(in: range, options: options) { _, paragraph, enclosing, _ in
+            self.typesetParagraph(paragraph, enclosing: enclosing, of: string, in: storage, composing: composing)
         }
         storage.endEditing()
     }
 
-    private func typesetParagraph(_ paragraph: NSRange, of string: NSString, in storage: NSTextStorage) {
-        guard isVertical else { return }
-        if usesKerning {
-            for index in Self.widenedStops(in: string, range: paragraph) {
-                storage.addAttribute(.kern, value: 0, range: NSRange(location: index, length: 1))
-            }
+    private func typesetParagraph(
+        _ paragraph: NSRange,
+        enclosing: NSRange,
+        of string: NSString,
+        in storage: NSTextStorage,
+        composing: NSRange?
+    ) {
+        var settled = IndexSet(integersIn: Range(paragraph) ?? 0 ..< 0)
+        if let composing, let composingRange = Range(composing) {
+            settled.remove(integersIn: composingRange)
         }
-        let upright = UprightGlyphs.runs(in: string, range: paragraph)
+        let runs = isVertical
+            ? settled.rangeView.flatMap { UprightGlyphs.runs(in: string, range: NSRange($0)) }
             .filter { !isCode(at: $0.range.location, in: storage) }
-        for run in upright {
-            guard let font = storage.attribute(.font, at: run.range.location, effectiveRange: nil) as? NSFont
-            else { continue }
-            storage.addAttributes([
-                .font: UprightGlyphs.font(for: run.kind, replacing: font),
-                .kern: 0,
-                .uprightGlyphs: run.kind.rawValue,
-                .uprightOriginalFont: font,
-            ], range: run.range)
+            : []
+        restoreOriginalFonts(in: enclosing, of: storage, keeping: runs)
+        runs.forEach { replaceFont(of: $0, in: storage) }
+
+        var fixed = IndexSet()
+        if usesKerning, isVertical {
+            for index in Self.widenedStops(in: string, range: paragraph) where settled.contains(index) {
+                fixed.insert(index)
+            }
+            runs.compactMap { Range($0.range) }.forEach { fixed.insert(integersIn: $0) }
+        } else if !usesKerning {
+            fixed.insert(integersIn: Range(enclosing) ?? 0 ..< 0)
+        }
+        var inherited = IndexSet(integersIn: Range(enclosing) ?? 0 ..< 0)
+        inherited.subtract(fixed)
+        fixed.rangeView.forEach { write(.kern, 0 as NSNumber, in: NSRange($0), of: storage) }
+        inherited.rangeView.forEach { write(.kern, nil, in: NSRange($0), of: storage) }
+    }
+
+    private func restoreOriginalFonts(in range: NSRange, of storage: NSTextStorage, keeping runs: [UprightGlyphs.Run]) {
+        storage.enumerateAttribute(.uprightGlyphs, in: range) { value, valueRange, _ in
+            guard let kind = (value as? Int).flatMap(UprightGlyphs.Kind.init),
+                  !runs.contains(UprightGlyphs.Run(range: valueRange, kind: kind))
+            else { return }
+            storage.enumerateAttribute(.uprightOriginalFont, in: valueRange) { original, originalRange, _ in
+                guard let original else { return }
+                storage.enumerateAttribute(.font, in: originalRange) { font, fontRange, _ in
+                    if let font = font as? NSFont, UprightGlyphs.isReplacement(font) {
+                        storage.addAttribute(.font, value: original, range: fontRange)
+                    }
+                }
+            }
+            for key in [NSAttributedString.Key.uprightGlyphs, .uprightOriginalFont, .verticalGlyphForm] {
+                storage.removeAttribute(key, range: valueRange)
+            }
         }
     }
 
-    private func restoreOriginalFonts(in range: NSRange, of storage: NSTextStorage) {
-        storage.enumerateAttribute(.uprightOriginalFont, in: range) { original, originalRange, _ in
-            guard let original else { return }
-            storage.enumerateAttribute(.font, in: originalRange) { font, fontRange, _ in
-                if let font = font as? NSFont, UprightGlyphs.isReplacement(font) {
-                    storage.addAttribute(.font, value: original, range: fontRange)
-                }
+    private func replaceFont(of run: UprightGlyphs.Run, in storage: NSTextStorage) {
+        guard let font = storage.attribute(.font, at: run.range.location, effectiveRange: nil) as? NSFont
+        else { return }
+        let original = UprightGlyphs.isReplacement(font)
+            ? storage.attribute(.uprightOriginalFont, at: run.range.location, effectiveRange: nil) as? NSFont ?? font
+            : font
+        let replacement = replacements[run.kind]?[original] ?? UprightGlyphs.font(for: run.kind, replacing: original)
+        replacements[run.kind, default: [:]][original] = replacement
+        write(.font, replacement, in: run.range, of: storage)
+        write(.uprightGlyphs, run.kind.rawValue as NSNumber, in: run.range, of: storage)
+        write(.uprightOriginalFont, original, in: run.range, of: storage)
+        write(.verticalGlyphForm, run.kind == .upright ? 1 as NSNumber : nil, in: run.range, of: storage)
+    }
+
+    /// 同じ値でも書き込むとTextKitが段落を組み直すので、変わるところだけ書き込む
+    private func write(
+        _ key: NSAttributedString.Key,
+        _ value: NSObject?,
+        in range: NSRange,
+        of storage: NSTextStorage
+    ) {
+        storage.enumerateAttribute(key, in: range) { current, currentRange, _ in
+            guard current as? NSObject != value else { return }
+            if let value {
+                storage.addAttribute(key, value: value, range: currentRange)
+            } else {
+                storage.removeAttribute(key, range: currentRange)
             }
         }
-        storage.removeAttribute(.uprightGlyphs, range: range)
-        storage.removeAttribute(.uprightOriginalFont, range: range)
     }
 
     /// 字間をTextKitに任せると、縦書きでは句読点が1.5字分に広がるので、字間を0にして1字分に戻す
@@ -111,23 +148,5 @@ final class JapaneseTypesetter {
     private func isCode(at location: Int, in storage: NSTextStorage) -> Bool {
         let style = storage.attribute(.markdownStyle, at: location, effectiveRange: nil) as? Int ?? 0
         return !MarkdownSyntax.Style(rawValue: style).isDisjoint(with: [.code, .monospaced])
-    }
-
-    private func storageDidProcessEditing() {
-        guard let storage = textView?.textStorage, storage.editedMask.contains(.editedCharacters) else { return }
-        let edited = storage.editedRange
-        pendingRange = pendingRange.map {
-            NSUnionRange(MarkdownHighlighter.range($0, adjustedFor: edited, delta: storage.changeInLength), edited)
-        } ?? edited
-        pendingTask = pendingTask ?? Task { [weak self] in
-            self?.typesetPending()
-        }
-    }
-
-    private func typesetPending() {
-        pendingTask = nil
-        guard let pendingRange else { return }
-        self.pendingRange = nil
-        typeset(pendingRange)
     }
 }

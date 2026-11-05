@@ -1,5 +1,18 @@
 import AppKit
 
+/// 縦書きは右の列から読むので、クリップビューの幅が変わっても右端を保つ。NSClipViewは原点を保つので、左端が残って右の列が見切れる
+final class EditorClipView: NSClipView {
+    override func setFrameSize(_ newSize: NSSize) {
+        let rightEdge = bounds.maxX
+        super.setFrameSize(newSize)
+        guard (documentView as? NSTextView)?.layoutOrientation == .vertical else { return }
+        var bounds = bounds
+        bounds.origin.x = rightEdge - bounds.width
+        scroll(to: constrainBoundsRect(bounds).origin)
+        enclosingScrollView?.reflectScrolledClipView(self)
+    }
+}
+
 /// 最後の段落を消して空の行が残ると、TextKit 2はその行に行間を足さずに組むので、組み直させる
 final nonisolated class TrailingNewlineContentStorage: NSTextContentStorage {
     override func processEditing(

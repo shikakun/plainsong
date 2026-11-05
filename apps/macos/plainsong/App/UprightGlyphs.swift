@@ -6,8 +6,7 @@ extension NSAttributedString.Key {
     nonisolated static let uprightOriginalFont = NSAttributedString.Key("PlainsongUprightOriginalFont")
 }
 
-/// TextKitは縦書きの半角英数を横に倒して描くので、立てる文字は字送りが1字分のフォントに差し替え、
-/// 描くときに元の字形を消して立てた字形を描き直す
+/// TextKitは縦書きの半角英数を横に倒して組むので、立てる文字は字送りが1字分のフォントに差し替える。縦中横には立てる属性がないので、描くときに回転させる
 nonisolated enum UprightGlyphs {
     enum Kind: Int {
         case upright = 1
@@ -20,10 +19,9 @@ nonisolated enum UprightGlyphs {
     }
 
     private struct Cell {
-        var band: CGRect
         var square: CGRect
-        var range: NSRange
-        var kind: Kind
+        var line: NSTextLineFragment
+        var lineOrigin: CGPoint
     }
 
     static func runs(in string: NSString, range: NSRange) -> [Run] {
@@ -91,12 +89,13 @@ nonisolated enum UprightGlyphs {
         font.fontDescriptor.object(forKey: .featureSettings) != nil
     }
 
+    /// 回転させて描き直せば、選択中の文字色や描画用の属性の色をTextKitが塗り分ける
     static func draw(_ fragment: NSTextLayoutFragment, at point: CGPoint, in context: CGContext, drawText: () -> Void) {
         guard let paragraph = (fragment.textElement as? NSTextParagraph)?.attributedString else {
             drawText()
             return
         }
-        let cells = cells(of: fragment, paragraph: paragraph, at: point)
+        let cells = tateChuYokoCells(of: fragment, paragraph: paragraph, at: point)
         guard !cells.isEmpty else {
             drawText()
             return
@@ -104,22 +103,24 @@ nonisolated enum UprightGlyphs {
         context.saveGState()
         let clip = CGMutablePath()
         clip.addRect(context.boundingBoxOfClipPath)
-        cells.forEach { clip.addRect($0.band) }
+        cells.forEach { clip.addRect($0.square) }
         context.addPath(clip)
         context.clip(using: .evenOdd)
         drawText()
         context.restoreGState()
 
-        NSGraphicsContext.saveGraphicsState()
-        defer { NSGraphicsContext.restoreGraphicsState() }
-        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
-        let colors = Colors(fragment: fragment)
         for cell in cells {
-            draw(cell, of: paragraph, colors: colors, in: context)
+            context.saveGState()
+            context.clip(to: cell.square)
+            context.translateBy(x: cell.square.midX, y: cell.square.midY)
+            context.rotate(by: -.pi / 2)
+            context.translateBy(x: -cell.square.midX, y: -cell.square.midY)
+            cell.line.draw(at: cell.lineOrigin, in: context)
+            context.restoreGState()
         }
     }
 
-    private static func cells(
+    private static func tateChuYokoCells(
         of fragment: NSTextLayoutFragment,
         paragraph: NSAttributedString,
         at point: CGPoint
@@ -130,106 +131,25 @@ nonisolated enum UprightGlyphs {
             // 縦書きでは、行の中心がglyphOriginの高さにくる
             let center = bounds.minY + line.glyphOrigin.y
             paragraph.enumerateAttribute(.uprightGlyphs, in: line.characterRange) { value, range, _ in
-                guard let kind = (value as? Int).flatMap(Kind.init),
+                guard value as? Int == Kind.tateChuYoko.rawValue,
                       let font = paragraph.attribute(.font, at: range.location, effectiveRange: nil) as? NSFont
                 else { return }
-                let ranges = kind == .tateChuYoko
-                    ? [range]
-                    : (range.location ..< NSMaxRange(range)).map { NSRange(location: $0, length: 1) }
-                for range in ranges {
-                    let minX = bounds.minX + line.locationForCharacter(at: range.location).x
-                    let maxX = bounds.minX + line.locationForCharacter(at: NSMaxRange(range)).x
-                    let size = font.pointSize
-                    cells.append(Cell(
-                        band: CGRect(x: minX, y: bounds.minY, width: maxX - minX, height: bounds.height),
-                        square: CGRect(x: minX, y: center - size / 2, width: maxX - minX, height: size),
-                        range: range,
-                        kind: kind
-                    ))
-                }
+                let ink = CTLineGetBoundsWithOptions(
+                    CTLineCreateWithAttributedString(paragraph.attributedSubstring(from: range)),
+                    .useGlyphPathBounds
+                )
+                let minX = bounds.minX + line.locationForCharacter(at: range.location).x
+                let advance = bounds.minX + line.locationForCharacter(at: NSMaxRange(range)).x - minX
+                // 字面ちょうどで切ると、倒れた字形の輪郭が残る。倒れた字面は列の中心から少しずれるので、高さにはさらに余裕を持たせる
+                let side = min(advance, max(ink.width + font.pointSize / 16, ink.height + font.pointSize / 10))
+                let inkCenter = minX + ink.midX
+                cells.append(Cell(
+                    square: CGRect(x: inkCenter - side / 2, y: center - side / 2, width: side, height: side),
+                    line: line,
+                    lineOrigin: bounds.origin
+                ))
             }
         }
         return cells
-    }
-
-    private static func draw(_ cell: Cell, of paragraph: NSAttributedString, colors: Colors, in context: CGContext) {
-        if let background = colors.background(at: cell.range.location) {
-            background.setFill()
-            cell.band.fill()
-        }
-        let attributes = paragraph.attributes(at: cell.range.location, effectiveRange: nil)
-        let color = colors.foreground(at: cell.range.location)
-            ?? attributes[.foregroundColor] as? NSColor
-            ?? NSColor.textColor
-        let text = (paragraph.string as NSString).substring(with: cell.range)
-        let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
-            .font: attributes[.font] ?? NSFont.systemFont(ofSize: cell.square.height),
-            NSAttributedString.Key(kCTForegroundColorFromContextAttributeName as String): true,
-        ]))
-        let ink = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
-        let advance = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil))
-        context.saveGState()
-        context.translateBy(x: cell.square.midX, y: cell.square.midY)
-        context.rotate(by: -.pi / 2)
-        let side = min(cell.square.width, cell.square.height)
-        let scale = cell.kind == .tateChuYoko ? min(1, side / max(advance, 1)) : 1
-        context.scaleBy(x: scale, y: -1)
-        color.setFill()
-        context.textMatrix = .identity
-        context.textPosition = CGPoint(x: -ink.midX, y: -ink.midY)
-        CTLineDraw(line, context)
-        context.restoreGState()
-    }
-
-    private struct Colors {
-        private var backgrounds: [(NSRange, NSColor)] = []
-        private var foregrounds: [(NSRange, NSColor)] = []
-
-        init(fragment: NSTextLayoutFragment) {
-            guard let layoutManager = fragment.textLayoutManager,
-                  let contentManager = layoutManager.textContentManager
-            else { return }
-            let start = fragment.rangeInElement.location
-            let end = fragment.rangeInElement.endLocation
-            func paragraphRange(_ range: NSTextRange) -> NSRange {
-                let location = contentManager.offset(from: start, to: range.location)
-                let length = contentManager.offset(from: range.location, to: range.endLocation)
-                return NSRange(location: location, length: length)
-            }
-            layoutManager.enumerateRenderingAttributes(from: start, reverse: false) { _, attributes, range in
-                guard range.location.compare(end) == .orderedAscending else { return false }
-                if let color = attributes[.backgroundColor] as? NSColor {
-                    backgrounds.append((paragraphRange(range), color))
-                }
-                if let color = attributes[.foregroundColor] as? NSColor {
-                    foregrounds.append((paragraphRange(range), color))
-                }
-                return true
-            }
-            // 選択した文字の色はrenderingAttributesに含まれないので、selectedTextAttributesから取る
-            // NSTextLayoutFragmentはメインスレッド以外で描かれることもあるので確かめる
-            guard Thread.isMainThread,
-                  let textView = layoutManager.textContainer?.textView,
-                  let color = MainActor.assumeIsolated({ () -> NSColor? in
-                      guard textView.window?.isKeyWindow == true,
-                            textView.window?.firstResponder === textView
-                      else { return nil }
-                      return textView.selectedTextAttributes[.foregroundColor] as? NSColor
-                  })
-            else { return }
-            for selection in layoutManager.textSelections {
-                for range in selection.textRanges where !range.isEmpty {
-                    foregrounds.append((paragraphRange(range), color))
-                }
-            }
-        }
-
-        func background(at location: Int) -> NSColor? {
-            backgrounds.last { NSLocationInRange(location, $0.0) }?.1
-        }
-
-        func foreground(at location: Int) -> NSColor? {
-            foregrounds.last { NSLocationInRange(location, $0.0) }?.1
-        }
     }
 }

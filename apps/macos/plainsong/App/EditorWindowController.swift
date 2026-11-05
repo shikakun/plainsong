@@ -49,7 +49,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         typesetter = JapaneseTypesetter(textView: textView)
         standardSelectedTextAttributes = textView.selectedTextAttributes
         super.init(window: editorWindow)
-        markdownHighlighter.didRestyle = { [weak typesetter] range in typesetter?.typeset(range) }
+        markdownHighlighter.didProcessEdits = { [weak typesetter] range in typesetter?.typeset(range) }
         editorWindow.delegate = self
         editorWindow.titleVisibility = .hidden
         editorWindow.titlebarAppearsTransparent = true
@@ -58,6 +58,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         place()
 
         layoutManager.delegate = whitespaceMarkers
+        scrollView.contentView = EditorClipView()
         scrollView.hasVerticalScroller = true
         scrollView.documentView = textView
         scrollView.autoresizingMask = [.width, .height]
@@ -158,11 +159,9 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         if themeChanged {
             applyTheme(ThemeLibrary().theme(for: settings.theme))
         }
-        if typesettingChanged || themeChanged || settings.highlightsMarkdown != previous?.highlightsMarkdown {
+        let highlightingChanged = settings.highlightsMarkdown != previous?.highlightsMarkdown
+        if typesettingChanged || themeChanged || orientationChanged || highlightingChanged {
             applyMarkdown()
-        }
-        if typesettingChanged || orientationChanged {
-            typesetter.update(usesKerning: settings.usesKerning, isVertical: settings.orientation == .vertical)
         }
         applyWhitespace(of: settings)
         applyLineNumbers(of: settings)
@@ -221,9 +220,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     }
 
     /// `applyFont(of:)`と`applyTheme(_:)`が本文全体のフォントと色を上書きするので、そのあとに呼び直す
+    /// 記法で変えたフォントも立てる英数のフォントに差し替えるので、そのあとに組み直す
     private func applyMarkdown() {
         guard let settings else { return }
         markdownHighlighter.update(flavor: markdownFlavor, appearance: .init(settings: settings, theme: theme))
+        typesetter.update(usesKerning: settings.usesKerning, isVertical: settings.orientation == .vertical)
     }
 
     private func applyWhitespace(of settings: EditorSettings) {
