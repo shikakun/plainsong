@@ -189,7 +189,6 @@ final class LineNumberView: NSView {
         string.draw(at: CGPoint(x: (bounds.width - width) / 2, y: point.y), withAttributes: attributes)
     }
 
-    /// 数字は本文の英字と同じ向きに倒し、数字の高さの中央を列の中心に揃える
     private func drawVerticalNumber(_ number: Int, middle: CGFloat) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         let string = String(number) as NSString

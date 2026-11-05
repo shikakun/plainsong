@@ -411,7 +411,6 @@ extension EditorSettings {
         fontSize * 2
     }
 
-    /// 横書きでは番号を置く列の幅、縦書きでは列の上で番号を置く帯の高さ
     var lineNumberGutter: CGFloat {
         minimumInset * 2
     }

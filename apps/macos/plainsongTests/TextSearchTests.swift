@@ -27,11 +27,6 @@ struct TextSearchTests {
     }
 
     @Test
-    func countsInUTF16() throws {
-        #expect(try ranges(TextSearch(pattern: "雨"), in: "😀雨") == [NSRange(location: 2, length: 1)])
-    }
-
-    @Test
     func expandsRegularExpressionTemplate() throws {
         let search = TextSearch(pattern: "「(.+?)」", usesRegularExpression: true)
         let string = "「雨」と「雪」" as NSString

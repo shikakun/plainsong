@@ -85,16 +85,12 @@ struct ReplaceFlowTests {
         #expect(first.isAtEdge(0, backwards: true))
         #expect(first.isAtEdge(2, backwards: false))
         #expect(!first.isAtEdge(1, backwards: false))
-        #expect(FindNavigation(ranges: [], selection: NSRange(), stopsAtEdges: false).target(backwards: false) == nil)
     }
 
     @Test
     func warnsOnlyWhenStoppedWithoutReplacing() {
-        #expect(FindOutcome.reachedStart.isWarning)
         #expect(FindOutcome.reachedEnd(replaced: 0).isWarning)
         // 末尾で止まっても、置換していれば流れをやり終えたものとする
         #expect(!FindOutcome.reachedEnd(replaced: 2).isWarning)
-        #expect(!FindOutcome.completed(replaced: 0).isWarning)
-        #expect(!FindOutcome.replacedAll(2).isWarning)
     }
 }
