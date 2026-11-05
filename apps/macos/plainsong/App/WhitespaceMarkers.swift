@@ -126,7 +126,7 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
             drawWhitespace(of: attributedString, scope: scope, at: point, clip: context.boundingBoxOfClipPath)
         }
         if markers.showsNewlines {
-            drawLineBreak(of: attributedString, at: point, in: context)
+            drawLineBreak(of: attributedString, at: point)
         }
     }
 
@@ -186,7 +186,7 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
         }
     }
 
-    private func drawLineBreak(of attributedString: NSAttributedString, at point: CGPoint, in context: CGContext) {
+    private func drawLineBreak(of attributedString: NSAttributedString, at point: CGPoint) {
         guard let index = WhitespaceMarkers.lineBreakStart(in: attributedString.string as NSString),
               let line = textLineFragments.last(where: { $0.characterRange.location <= index }),
               let font = attributedString.attribute(.font, at: index, effectiveRange: nil) as? NSFont
@@ -199,7 +199,8 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
         if isVertical {
             guard let layoutManager = textLayoutManager as? LineHeightSegmentLayoutManager else { return }
             let middle = layoutManager.verticalMiddle(of: line, in: bounds, isEmpty: isEmpty)
-            Self.drawUprightPilcrow(at: minX, middle: middle, font: font, in: context)
+            // 字面の中央を列の中心に揃える
+            Self.drawPilcrow(at: minX, baseline: middle + font.capHeight / 2, font: font)
             return
         }
         // 空の行は、行間を文字の上に分けず行の高さに含めて組むので、ベースラインを下端から求める
@@ -287,16 +288,6 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
             path.lineCapStyle = .round
             path.stroke()
         }
-    }
-
-    private static func drawUprightPilcrow(at minX: CGFloat, middle: CGFloat, font: NSFont, in context: CGContext) {
-        let size = font.pointSize
-        context.saveGState()
-        defer { context.restoreGState() }
-        context.translateBy(x: minX + size / 8 + font.capHeight / 2, y: middle)
-        context.rotate(by: -.pi / 2)
-        // 字形の幅の中央を列の中心に揃える
-        drawPilcrow(at: -size * 0.31, baseline: font.capHeight / 2, font: font)
     }
 
     private static func drawPilcrow(at minX: CGFloat, baseline: CGFloat, font: NSFont) {
