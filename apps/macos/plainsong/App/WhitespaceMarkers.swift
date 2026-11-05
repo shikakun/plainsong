@@ -80,6 +80,7 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
 
     /// 空の行は描ける範囲の幅がなく、改行の記号が切れるので、行の幅に記号1つ分を足した範囲まで広げる
     /// 縦書きの傍線は列の外に出ることがあるので、列の右にあたる上にも広げる
+    /// 空行の改行の記号は字下げせずに描くので、字下げの分だけ左にも広げる
     /// 描ける範囲は組むときに決まり、表示を切り替えても組み直さないので、オフのときも広げておく
     override var renderingSurfaceBounds: CGRect {
         let bounds = super.renderingSurfaceBounds
@@ -90,16 +91,22 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
         else { return bounds }
         let frame = layoutFragmentFrame
         let overhang = font.pointSize / 4
+        let indent = firstLineHeadIndent(of: attributedString)
         return bounds.union(CGRect(
-            x: 0,
+            x: -indent,
             y: -overhang,
-            width: frame.width + font.pointSize,
+            width: indent + frame.width + font.pointSize,
             height: frame.height + overhang
         ))
     }
 
     private var isVertical: Bool {
         textLayoutManager?.textContainer?.layoutOrientation == .vertical
+    }
+
+    private func firstLineHeadIndent(of attributedString: NSAttributedString) -> CGFloat {
+        let style = attributedString.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        return style?.firstLineHeadIndent ?? 0
     }
 
     override func draw(at point: CGPoint, in context: CGContext) {
@@ -186,7 +193,9 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
         else { return }
         let bounds = line.typographicBounds.offsetBy(dx: point.x, dy: point.y)
         let isEmpty = index == line.characterRange.location
-        let minX = bounds.minX + line.locationForCharacter(at: index).x
+        // 字下げは行ではなくフラグメントの位置に足されるので、空の段落の記号は字下げの分だけ戻して先頭に描く
+        let indent = index == 0 ? firstLineHeadIndent(of: attributedString) : 0
+        let minX = bounds.minX + line.locationForCharacter(at: index).x - indent
         if isVertical {
             guard let layoutManager = textLayoutManager as? LineHeightSegmentLayoutManager else { return }
             let middle = layoutManager.verticalMiddle(of: line, in: bounds, isEmpty: isEmpty)
