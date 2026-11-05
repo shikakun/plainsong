@@ -47,6 +47,7 @@ final class MarkdownHighlighter {
     private var pendingRange: NSRange?
     private var pendingTask: Task<Void, Never>?
     private var editingObservation: (any NSObjectProtocol)?
+    var didProcessEdits: ((NSRange) -> Void)?
 
     init(textView: NSTextView) {
         self.textView = textView
@@ -86,8 +87,7 @@ final class MarkdownHighlighter {
     }
 
     private func storageDidProcessEditing() {
-        guard flavor != nil, let storage = textView?.textStorage, storage.editedMask.contains(.editedCharacters)
-        else { return }
+        guard let storage = textView?.textStorage, storage.editedMask.contains(.editedCharacters) else { return }
         let edited = storage.editedRange
         let delta = storage.changeInLength
         blocks = blocks.map { block in
@@ -98,22 +98,24 @@ final class MarkdownHighlighter {
         pendingRange = pendingRange.map { NSUnionRange(Self.range($0, adjustedFor: edited, delta: delta), edited) }
             ?? edited
         pendingTask = pendingTask ?? Task { [weak self] in
-            self?.highlightPending()
+            self?.processPending()
         }
     }
 
-    private func highlightPending() {
+    private func processPending() {
         pendingTask = nil
-        guard flavor != nil, let pendingRange, let storage = textView?.textStorage else { return }
+        guard let pendingRange, let storage = textView?.textStorage else { return }
         self.pendingRange = nil
-        let string = storage.string as NSString
-        let newBlocks = MarkdownSyntax.blocks(in: string)
         var range = pendingRange
-        for block in Set(blocks).symmetricDifference(newBlocks) {
-            range = NSUnionRange(range, block.range)
+        if flavor != nil {
+            let newBlocks = MarkdownSyntax.blocks(in: storage.string as NSString)
+            for block in Set(blocks).symmetricDifference(newBlocks) {
+                range = NSUnionRange(range, block.range)
+            }
+            blocks = newBlocks
+            highlight(NSIntersectionRange(range, NSRange(location: 0, length: storage.length)), in: storage)
         }
-        blocks = newBlocks
-        highlight(NSIntersectionRange(range, NSRange(location: 0, length: storage.length)), in: storage)
+        didProcessEdits?(range)
     }
 
     private func highlight(_ range: NSRange, in storage: NSTextStorage) {

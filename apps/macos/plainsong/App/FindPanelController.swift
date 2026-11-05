@@ -76,7 +76,7 @@ final class FindPanelController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         if target.wrapped {
             flow?.didWrap(backwards: backwards)
         }
-        editor.showFindResult(ranges[target.index], avoiding: isShown ? panel?.frame : nil)
+        editor.showFindResult(ranges[target.index], avoiding: isShown ? panel : nil)
         let isAtEdge = isShown && navigation.isAtEdge(target.index, backwards: backwards)
         outcome = isAtEdge ? (backwards ? .reachedStart : .reachedEnd(replaced: flow?.replacedCount ?? 0)) : nil
         updateControls()
@@ -188,7 +188,7 @@ extension FindPanelController {
         }
         if let location, !results.isEmpty {
             let index = results.firstIndex { $0.range.location >= location } ?? 0
-            editor.showFindResult(results[index].range, avoiding: panel.frame)
+            editor.showFindResult(results[index].range, avoiding: panel)
         }
         markedRanges = editor.updateFindMarks(
             removing: markedRanges,
@@ -339,7 +339,7 @@ extension FindPanelController {
         let replacedCount = flow?.replacedCount ?? 1
         switch flow?.step(after: from, in: results.map(\.range), stopsAtEnd: !wrapsAround) {
         case let .select(next):
-            editor.showFindResult(results[next].range, avoiding: panel.frame)
+            editor.showFindResult(results[next].range, avoiding: panel)
             outcome = nil
             updateControls()
         case .reachedEnd:

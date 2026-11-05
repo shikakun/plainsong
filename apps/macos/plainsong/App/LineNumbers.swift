@@ -1,12 +1,16 @@
 import AppKit
 
-/// 本文の左の余白に重ね、改行のあとに始まる行に番号を描く。描くのは見えている行だけ
+/// 本文の行頭の側の余白に重ね、改行のあとに始まる行に番号を描く。描くのは見えている行だけ
 final class LineNumberView: NSView {
     private let textView: NSTextView
     /// 前回描いたときの、先頭の段落の位置と行番号。そこから数えれば、文書の先頭から数え直さずに済む
     private var anchor: (location: Int, number: Int)?
 
     private var font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+
+    private var attributes: [NSAttributedString.Key: Any] {
+        [.font: font, .foregroundColor: NSColor.secondaryLabelColor]
+    }
 
     /// 本文の文字サイズ。行番号は1段階小さいサイズにし、いちばん小さいサイズでは同じにする
     var fontSize: CGFloat = 0 {
@@ -25,7 +29,6 @@ final class LineNumberView: NSView {
     init(textView: NSTextView) {
         self.textView = textView
         super.init(frame: .zero)
-        autoresizingMask = [.height]
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(textDidProcessEditing(_:)),
@@ -91,11 +94,12 @@ final class LineNumberView: NSView {
     }
 
     override func draw(_: NSRect) {
-        guard let layoutManager = textView.textLayoutManager,
+        guard let layoutManager = textView.textLayoutManager as? LineHeightSegmentLayoutManager,
               let contentManager = layoutManager.textContentManager,
               let string = textView.textStorage?.mutableString,
               let bodyFont = textView.typingAttributes[.font] as? NSFont
         else { return }
+        let isVertical = textView.layoutOrientation == .vertical
         let visible = textView.visibleRect
         let origin = textView.textContainerOrigin
         let documentStart = contentManager.documentRange.location
@@ -123,10 +127,15 @@ final class LineNumberView: NSView {
                 current += 1
                 let bounds = line.typographicBounds.offsetBy(dx: frame.minX, dy: frame.minY)
                 guard bounds.maxY >= visible.minY else { continue }
-                // 空の行は、行間を文字の上に分けず行の高さに含めて組むので、ベースラインを下端から求める
                 let isEmpty = lineStart == paragraph.length || Self.isLineBreak(paragraph.character(at: lineStart))
-                let baseline = isEmpty ? bounds.maxY + bodyFont.descender : bounds.minY + line.glyphOrigin.y
-                drawNumber(current, baseline: baseline, bodyFont: bodyFont)
+                if isVertical {
+                    let middle = layoutManager.verticalMiddle(of: line, in: bounds, isEmpty: isEmpty)
+                    drawVerticalNumber(current, middle: middle)
+                } else {
+                    // 空の行は、行間を文字の上に分けず行の高さに含めて組むので、ベースラインを下端から求める
+                    let baseline = isEmpty ? bounds.maxY + bodyFont.descender : bounds.minY + line.glyphOrigin.y
+                    drawNumber(current, baseline: baseline, bodyFont: bodyFont)
+                }
             }
             number = current
             return true
@@ -159,8 +168,12 @@ final class LineNumberView: NSView {
         font bodyFont: NSFont
     ) {
         guard let range = NSTextRange(location: location, end: location) else { return }
-        layoutManager.enumerateTextSegments(in: range, type: .standard) { _, frame, _, _ in
-            drawNumber(1, baseline: frame.maxY + origin.y + bodyFont.descender, bodyFont: bodyFont)
+        layoutManager.enumerateTextSegments(in: range, type: .standard) { _, frame, baseline, _ in
+            if textView.layoutOrientation == .vertical {
+                drawVerticalNumber(1, middle: frame.minY + baseline + origin.y)
+            } else {
+                drawNumber(1, baseline: frame.minY + baseline + origin.y, bodyFont: bodyFont)
+            }
             return false
         }
     }
@@ -168,11 +181,24 @@ final class LineNumberView: NSView {
     /// 数字の高さの中央を、本文の行の高さの中央に揃える
     private func drawNumber(_ number: Int, baseline: CGFloat, bodyFont: NSFont) {
         let string = String(number) as NSString
-        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.secondaryLabelColor]
+        let attributes = attributes
         let width = string.size(withAttributes: attributes).width
         // 計算どおりに中央へ揃えると下がって見えるので、0.5pt上げる
         let middle = baseline - (bodyFont.ascender + bodyFont.descender) / 2 - 0.5
         let point = convert(CGPoint(x: 0, y: middle + font.capHeight / 2 - font.ascender), from: textView)
         string.draw(at: CGPoint(x: (bounds.width - width) / 2, y: point.y), withAttributes: attributes)
+    }
+
+    private func drawVerticalNumber(_ number: Int, middle: CGFloat) {
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        let string = String(number) as NSString
+        let attributes = attributes
+        let width = string.size(withAttributes: attributes).width
+        let center = convert(CGPoint(x: 0, y: middle), from: textView).x
+        context.saveGState()
+        defer { context.restoreGState() }
+        context.translateBy(x: center, y: bounds.midY)
+        context.rotate(by: .pi / 2)
+        string.draw(at: CGPoint(x: -width / 2, y: font.capHeight / 2 - font.ascender), withAttributes: attributes)
     }
 }

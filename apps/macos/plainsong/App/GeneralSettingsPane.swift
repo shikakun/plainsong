@@ -6,6 +6,7 @@ final class GeneralSettingsPane: SettingsPane {
     private let fontFamilyButton = NSPopUpButton()
     private let fontSizeSlider = NSSlider()
     private let lineSpacingControl = NSSegmentedControl()
+    private let orientationOptions: OrientationOptions
     private let kerningCheckbox = NSButton(
         checkboxWithTitle: String(localized: "settings.kerning"),
         target: nil,
@@ -68,6 +69,7 @@ final class GeneralSettingsPane: SettingsPane {
     init(model: SettingsModel, relaunch: @escaping () -> Void) {
         self.model = model
         self.relaunch = relaunch
+        orientationOptions = OrientationOptions(model: model)
         super.init(title: String(localized: "settings.general"))
         NotificationCenter.default.addObserver(
             self,
@@ -134,13 +136,14 @@ final class GeneralSettingsPane: SettingsPane {
         sliderRow.rowAlignment = .none
         sliderRow.yPlacement = .center
 
+        let orientationGrid = orientationOptions.makeSection()
         let optionsGrid = makeOptionsSection()
         let popUpGrid = Self.columns([makeLanguageRow(), makeIconRow()])
         let filesGrid = makeFilesSection()
         let startupGrid = makeStartupSection()
         updateSettingsControls()
-        Self.alignLabelColumns([grid, optionsGrid, filesGrid, popUpGrid, startupGrid])
-        return [grid, optionsGrid, filesGrid, Self.separator(), popUpGrid, startupGrid]
+        Self.alignLabelColumns([grid, orientationGrid, optionsGrid, filesGrid, popUpGrid, startupGrid])
+        return [grid, orientationGrid, optionsGrid, filesGrid, Self.separator(), popUpGrid, startupGrid]
     }
 
     private func makeLanguageRow() -> [NSView] {
@@ -219,6 +222,7 @@ final class GeneralSettingsPane: SettingsPane {
         updateFontSizeValueDescription()
         lineSpacingControl.selectedSegment =
             EditorSettings.LineSpacing.allCases.firstIndex(of: settings.lineSpacing) ?? 0
+        orientationOptions.update(with: settings)
         kerningCheckbox.state = settings.usesKerning ? .on : .off
         readableWidthCheckbox.state = settings.usesReadableWidth ? .on : .off
         readableWidthButton.selectItem(for: settings.readableWidth)

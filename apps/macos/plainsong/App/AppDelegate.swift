@@ -83,6 +83,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         settingsModel.update { $0.lineSpacing = lineSpacing }
     }
 
+    @objc func selectOrientation(_ sender: NSMenuItem) {
+        guard let orientation = sender.representedObject as? EditorSettings.Orientation else { return }
+        settingsModel.update { $0.orientation = orientation }
+    }
+
     @objc func toggleSetting(_ sender: NSMenuItem) {
         guard let keyPath = sender.representedObject as? WritableKeyPath<EditorSettings, Bool> else { return }
         settingsModel.update { $0[keyPath: keyPath].toggle() }
@@ -110,6 +115,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             menuItem.state = menuItem.representedObject as? CGFloat == settings.fontSize ? .on : .off
         case #selector(selectLineSpacing(_:)):
             menuItem.state = menuItem.representedObject as? EditorSettings.LineSpacing == settings.lineSpacing
+                ? .on
+                : .off
+        case #selector(selectOrientation(_:)):
+            menuItem.state = menuItem.representedObject as? EditorSettings.Orientation == settings.orientation
                 ? .on
                 : .off
         case #selector(toggleSetting(_:)):
@@ -152,8 +161,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             }
         }
         if placement.showsInMenuBar, menuBarIcon == nil {
-            menuBarIcon = MenuBarIcon {
-                NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: .init())
+            menuBarIcon = MenuBarIcon { [weak self] in
+                NSApp.activate()
+                self?.showEditors()
             }
         } else if !placement.showsInMenuBar, let menuBarIcon {
             menuBarIcon.remove()

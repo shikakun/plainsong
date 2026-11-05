@@ -1,5 +1,18 @@
 import AppKit
 
+/// 縦書きは右の列から読むので、クリップビューの幅が変わっても右端を保つ。NSClipViewは原点を保つので、左端が残って右の列が見切れる
+final class EditorClipView: NSClipView {
+    override func setFrameSize(_ newSize: NSSize) {
+        let rightEdge = bounds.maxX
+        super.setFrameSize(newSize)
+        guard (documentView as? NSTextView)?.layoutOrientation == .vertical else { return }
+        var bounds = bounds
+        bounds.origin.x = rightEdge - bounds.width
+        scroll(to: constrainBoundsRect(bounds).origin)
+        enclosingScrollView?.reflectScrolledClipView(self)
+    }
+}
+
 /// 最後の段落を消して空の行が残ると、TextKit 2はその行に行間を足さずに組むので、組み直させる
 final nonisolated class TrailingNewlineContentStorage: NSTextContentStorage {
     override func processEditing(
@@ -28,9 +41,21 @@ final nonisolated class TrailingNewlineContentStorage: NSTextContentStorage {
     }
 }
 
-/// 行間を足すと、TextKit 2はカーソルと選択範囲を行間の分だけ文字の上に伸ばすので、文字1行分の高さに縮めて下に寄せる
+/// 行間を足すと、TextKit 2はカーソルと選択範囲を行間の分だけ文字の上に伸ばすので、文字1行分の高さに縮める
+/// 行の高さを固定すると、ベースラインは欧文フォントのディセントで決まり、和文の字面が帯の中心からずれるので、帯を字面の中心に合わせる
 final nonisolated class LineHeightSegmentLayoutManager: NSTextLayoutManager {
+    /// 帯は行の外へ少しはみ出す。テキストビューの外には描けないので、先頭と末尾の行の分をテキストコンテナで空ける
+    static let bandOverhang: CGFloat = 2
+
     var lineHeight: CGFloat = 0
+    /// 和文の字面の中心の、ベースラインからの高さ
+    var japaneseMiddle: CGFloat = 0
+
+    /// 縦書きでは、行の中心がglyphOriginの高さにくる。空の行は、行間を文字の上に分けず行の高さに含めて組むので、下端から求める
+    /// 横書きでは、同じ計算でベースラインの位置になる
+    func verticalMiddle(of line: NSTextLineFragment, in bounds: CGRect, isEmpty: Bool) -> CGFloat {
+        (isEmpty ? bounds.maxY - lineHeight : bounds.minY) + line.glyphOrigin.y
+    }
 
     override func enumerateTextSegments(
         in textRange: NSTextRange,
@@ -43,12 +68,27 @@ final nonisolated class LineHeightSegmentLayoutManager: NSTextLayoutManager {
             return
         }
         super.enumerateTextSegments(in: textRange, type: type, options: options) { range, frame, baseline, container in
-            let spacing = max(frame.height - lineHeight, 0)
-            var trimmed = frame
-            trimmed.origin.y += spacing
-            trimmed.size.height -= spacing
-            return block(range, trimmed, baseline - spacing, container)
+            let position = baselinePosition(of: frame) ?? frame.minY + baseline
+            let middle = position - (container.layoutOrientation == .vertical ? 0 : japaneseMiddle)
+            var band = frame
+            band.size.height -= max(frame.height - lineHeight, 0)
+            // 帯の端がにじまないよう、TextKitが組む行の位置と同じく整数にする
+            band.origin.y = (middle - band.height / 2).rounded()
+            return block(range, band, position - band.minY, container)
         }
+    }
+
+    /// 空の文書にはレイアウトフラグメントがない
+    private func baselinePosition(of frame: CGRect) -> CGFloat? {
+        let bottom = frame.maxY - 1
+        guard let fragment = textLayoutFragment(for: CGPoint(x: frame.midX, y: bottom)),
+              let paragraph = fragment.textElement as? NSTextParagraph
+        else { return nil }
+        let top = fragment.layoutFragmentFrame.minY
+        guard let line = fragment.textLineFragments.last(where: { top + $0.typographicBounds.minY <= bottom })
+        else { return nil }
+        let isEmpty = paragraph.attributedString.string.allSatisfy(\.isNewline)
+        return verticalMiddle(of: line, in: line.typographicBounds, isEmpty: isEmpty) + top
     }
 }
 
@@ -92,20 +132,22 @@ final nonisolated class ParagraphIndentRules: NSObject, NSTextContentStorageDele
 }
 
 extension NSTextView {
-    /// textContainerInsetは左右に同じ幅しか空けられないので、テキストコンテナの幅で右の余白を決める
+    /// textContainerInsetは行頭と行末に同じ幅しか空けられないので、行末の余白はテキストコンテナの幅で決める
+    /// 縦書きでもテキストコンテナの幅が行の長さになるので、clipLengthには行に使える高さを渡す
     /// ウィンドウの大きさを変えているあいだは何度も呼ばれるので、変わったときだけ渡す
-    func setHorizontalInsets(leading: CGFloat, trailing: CGFloat, clipWidth: CGFloat) {
+    func setLineInsets(leading: CGFloat, trailing: CGFloat, clipLength: CGFloat) {
         guard let textContainer else { return }
         let tracksWidth = leading == trailing
         if textContainer.widthTracksTextView != tracksWidth {
             textContainer.widthTracksTextView = tracksWidth
         }
-        let width = max(clipWidth - leading - trailing, 0)
+        let width = max(clipLength - leading - trailing, 0)
         if textContainer.size.width != width {
             textContainer.size = NSSize(width: width, height: textContainer.size.height)
         }
-        if textContainerInset.width != leading {
-            textContainerInset = NSSize(width: leading, height: 0)
+        let inset = NSSize(width: leading, height: LineHeightSegmentLayoutManager.bandOverhang)
+        if textContainerInset != inset {
+            textContainerInset = inset
         }
     }
 

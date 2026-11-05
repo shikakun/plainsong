@@ -6,6 +6,9 @@ final nonisolated class WhitespaceMarkers: NSObject, NSTextLayoutManagerDelegate
     var color = NSColor.tertiaryLabelColor
     /// 「選択範囲のみ」で使う、本文の先頭からの範囲
     var selectedRanges: [NSRange] = []
+    /// 本文の先頭からの範囲
+    var replacedRanges: [NSRange] = []
+    var replacedColor = NSColor.textInsertionPointColor
 
     func textLayoutManager(
         _: NSTextLayoutManager,
@@ -76,6 +79,8 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
     }
 
     /// 空の行は描ける範囲の幅がなく、改行の記号が切れるので、行の幅に記号1つ分を足した範囲まで広げる
+    /// 縦書きの傍線は列の外に出ることがあるので、列の右にあたる上にも広げる
+    /// 空行の改行の記号は字下げせずに描くので、字下げの分だけ左にも広げる
     /// 描ける範囲は組むときに決まり、表示を切り替えても組み直さないので、オフのときも広げておく
     override var renderingSurfaceBounds: CGRect {
         let bounds = super.renderingSurfaceBounds
@@ -85,24 +90,64 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
               as? NSFont
         else { return bounds }
         let frame = layoutFragmentFrame
-        return bounds.union(CGRect(x: 0, y: 0, width: frame.width + font.pointSize, height: frame.height))
+        let overhang = font.pointSize / 4
+        let indent = firstLineHeadIndent(of: attributedString)
+        return bounds.union(CGRect(
+            x: -indent,
+            y: -overhang,
+            width: indent + frame.width + font.pointSize,
+            height: frame.height + overhang
+        ))
+    }
+
+    private var isVertical: Bool {
+        textLayoutManager?.textContainer?.layoutOrientation == .vertical
+    }
+
+    private func firstLineHeadIndent(of attributedString: NSAttributedString) -> CGFloat {
+        let style = attributedString.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
+        return style?.firstLineHeadIndent ?? 0
     }
 
     override func draw(at point: CGPoint, in context: CGContext) {
-        super.draw(at: point, in: context)
-        guard markers.scope != nil || markers.showsNewlines,
+        UprightGlyphs.draw(self, at: point, in: context) {
+            super.draw(at: point, in: context)
+        }
+        guard markers.scope != nil || markers.showsNewlines || !markers.replacedRanges.isEmpty,
               let attributedString = (textElement as? NSTextParagraph)?.attributedString
         else { return }
 
         NSGraphicsContext.saveGraphicsState()
         defer { NSGraphicsContext.restoreGraphicsState() }
         NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
+        drawReplacedUnderlines(of: attributedString, at: point)
         markers.color.set()
         if let scope = markers.scope {
             drawWhitespace(of: attributedString, scope: scope, at: point, clip: context.boundingBoxOfClipPath)
         }
         if markers.showsNewlines {
             drawLineBreak(of: attributedString, at: point)
+        }
+    }
+
+    private func drawReplacedUnderlines(of attributedString: NSAttributedString, at point: CGPoint) {
+        let ranges = paragraphRanges(of: markers.replacedRanges)
+        guard !ranges.isEmpty else { return }
+        markers.replacedColor.setFill()
+        for line in textLineFragments {
+            let bounds = line.typographicBounds.offsetBy(dx: point.x, dy: point.y)
+            let origin = bounds.minY + line.glyphOrigin.y
+            for range in ranges {
+                guard let drawn = range.intersection(line.characterRange), drawn.length > 0,
+                      let font = attributedString.attribute(.font, at: drawn.location, effectiveRange: nil) as? NSFont
+                else { continue }
+                let minX = bounds.minX + line.locationForCharacter(at: drawn.location).x
+                let maxX = bounds.minX + line.locationForCharacter(at: NSMaxRange(drawn)).x
+                let thickness = font.underlineThickness * 2
+                // 縦書きでは、描くときの上が列の右になる。傍線は列の右に引くので、字面の外の上に置く
+                let top = isVertical ? origin - font.pointSize / 2 - thickness : origin - font.underlinePosition
+                CGRect(x: minX, y: top, width: maxX - minX, height: thickness).fill()
+            }
         }
     }
 
@@ -113,7 +158,7 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
         clip: CGRect
     ) {
         let string = attributedString.string as NSString
-        let selectedRanges = paragraphSelectedRanges(scope: scope)
+        let selectedRanges = paragraphRanges(of: markers.selectedRanges)
         if case .selection = scope, selectedRanges.isEmpty {
             return
         }
@@ -131,8 +176,12 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
                 else { continue }
                 let minX = bounds.minX + line.locationForCharacter(at: index).x
                 let maxX = bounds.minX + line.locationForCharacter(at: index + 1).x
-                let baseline = bounds.minY + line.glyphOrigin.y
-                Self.drawMarker(for: string.character(at: index), from: minX, to: maxX, baseline: baseline, font: font)
+                let origin = bounds.minY + line.glyphOrigin.y
+                // 縦書きでは、行の中心がglyphOriginの高さにくる
+                let middle = isVertical
+                    ? (halfWidth: origin, fullWidth: origin)
+                    : (halfWidth: origin - font.xHeight / 2, fullWidth: origin - font.capHeight / 2)
+                Self.drawMarker(for: string.character(at: index), from: minX, to: maxX, middle: middle, font: font)
             }
         }
     }
@@ -143,21 +192,30 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
               let font = attributedString.attribute(.font, at: index, effectiveRange: nil) as? NSFont
         else { return }
         let bounds = line.typographicBounds.offsetBy(dx: point.x, dy: point.y)
+        let isEmpty = index == line.characterRange.location
+        // 字下げは行ではなくフラグメントの位置に足されるので、空の段落の記号は字下げの分だけ戻して先頭に描く
+        let indent = index == 0 ? firstLineHeadIndent(of: attributedString) : 0
+        let minX = bounds.minX + line.locationForCharacter(at: index).x - indent
+        if isVertical {
+            guard let layoutManager = textLayoutManager as? LineHeightSegmentLayoutManager else { return }
+            let middle = layoutManager.verticalMiddle(of: line, in: bounds, isEmpty: isEmpty)
+            // 字面の中央を列の中心に揃える
+            Self.drawPilcrow(at: minX, baseline: middle + font.capHeight / 2, font: font)
+            return
+        }
         // 空の行は、行間を文字の上に分けず行の高さに含めて組むので、ベースラインを下端から求める
-        let baseline = index == line.characterRange.location
-            ? bounds.maxY + font.descender
-            : bounds.minY + line.glyphOrigin.y
-        Self.drawPilcrow(at: bounds.minX + line.locationForCharacter(at: index).x, baseline: baseline, font: font)
+        let baseline = isEmpty ? bounds.maxY + font.descender : bounds.minY + line.glyphOrigin.y
+        Self.drawPilcrow(at: minX, baseline: baseline, font: font)
     }
 
-    private func paragraphSelectedRanges(scope: EditorSettings.WhitespaceScope) -> [NSRange] {
-        guard case .selection = scope,
-              let contentManager = textLayoutManager?.textContentManager
+    /// NSTextLayoutFragmentはメインスレッド以外で描かれることもあるので、本文が編集されている最中に位置を求めないよう確かめる
+    private func paragraphRanges(of ranges: [NSRange]) -> [NSRange] {
+        guard !ranges.isEmpty, Thread.isMainThread, let contentManager = textLayoutManager?.textContentManager
         else { return [] }
         let location = contentManager.offset(from: contentManager.documentRange.location, to: rangeInElement.location)
         let length = contentManager.offset(from: rangeInElement.location, to: rangeInElement.endLocation)
         let paragraph = NSRange(location: location, length: length)
-        return markers.selectedRanges.compactMap { range in
+        return ranges.compactMap { range in
             guard let intersection = range.intersection(paragraph), intersection.length > 0 else { return nil }
             return NSRange(location: intersection.location - location, length: intersection.length)
         }
@@ -167,14 +225,14 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
         for character: unichar,
         from minX: CGFloat,
         to maxX: CGFloat,
-        baseline: CGFloat,
+        middle: (halfWidth: CGFloat, fullWidth: CGFloat),
         font: NSFont
     ) {
         let size = font.pointSize
         let lineWidth = size / 16
         let width = maxX - minX
         let midX = minX + width / 2
-        let midY = baseline - font.xHeight / 2
+        let midY = middle.halfWidth
         let halfWidth = min(size / 8, width * 0.4)
         switch character {
         case 0x20, 0xA0, 0x2007, 0x202F:
@@ -199,7 +257,7 @@ private final nonisolated class WhitespaceLayoutFragment: NSTextLayoutFragment {
             let side = width * 0.6
             let rect = CGRect(
                 x: minX + (width - side) / 2,
-                y: baseline - font.capHeight / 2 - side / 2,
+                y: middle.fullWidth - side / 2,
                 width: side,
                 height: side
             )

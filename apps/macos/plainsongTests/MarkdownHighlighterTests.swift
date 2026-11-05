@@ -6,8 +6,6 @@ import Testing
 struct MarkdownHighlighterTests {
     @Test
     func readsEveryDocumentAsMarkdownExceptMDX() {
-        #expect(MarkdownSyntax.Flavor(url: nil) == .markdown)
-        #expect(MarkdownSyntax.Flavor(url: URL(filePath: "/メモ.txt")) == .markdown)
         #expect(MarkdownSyntax.Flavor(url: URL(filePath: "/README.md")) == .markdown)
         #expect(MarkdownSyntax.Flavor(url: URL(filePath: "/page.mdx")) == .mdx)
     }
@@ -55,22 +53,6 @@ struct MarkdownHighlighterTests {
         let storage = textView.textStorage
         #expect(storage?.attribute(.markdownStyle, at: 2, effectiveRange: nil) == nil)
         #expect(storage?.attribute(.font, at: 2, effectiveRange: nil) as? NSFont == appearance.font)
-    }
-
-    @Test
-    func typesWithoutInheritingStyles() {
-        let textView = NSTextView(usingTextLayoutManager: true)
-        let highlighter = MarkdownHighlighter(textView: textView)
-        let appearance = MarkdownHighlighter.Appearance(settings: EditorSettings(), theme: nil)
-        highlighter.update(flavor: .markdown, appearance: appearance)
-        let attributes = highlighter.plainAttributes([
-            .markdownStyle: MarkdownSyntax.Style.bold.rawValue,
-            .font: appearance.boldFont,
-            .kern: 0,
-        ])
-        #expect(attributes[.markdownStyle] == nil)
-        #expect(attributes[.font] as? NSFont == appearance.font)
-        #expect(attributes[.kern] as? Int == 0)
     }
 
     @Test

@@ -37,6 +37,7 @@ struct EditorSettings: Equatable {
     var fontFamily = FontFamily.sansSerif
     var fontSize: CGFloat = 16
     var lineSpacing = LineSpacing.standard
+    var orientation = Orientation.horizontal
     var usesKerning = false
     var usesReadableWidth = false
     var readableWidth = ReadableWidth.standard
@@ -86,6 +87,7 @@ struct EditorSettings: Equatable {
     private static let fontFamilyKey = "fontFamily"
     private static let fontSizeKey = "fontSize"
     private static let lineSpacingKey = "lineSpacing"
+    private static let orientationKey = "orientation"
     private static let usesKerningKey = "usesKerning"
     private static let usesReadableWidthKey = "usesReadableWidth"
     private static let readableWidthKey = "readableWidth"
@@ -118,6 +120,7 @@ struct EditorSettings: Equatable {
             settings.fontSize = fontSize
         }
         settings.lineSpacing = defaults.value(forKey: lineSpacingKey, default: settings.lineSpacing)
+        settings.orientation = defaults.value(forKey: orientationKey, default: settings.orientation)
         if let usesKerning = defaults.object(forKey: usesKerningKey) as? Bool {
             settings.usesKerning = usesKerning
         }
@@ -167,6 +170,7 @@ struct EditorSettings: Equatable {
         defaults.set(fontFamily.rawValue, forKey: Self.fontFamilyKey)
         defaults.set(Double(fontSize), forKey: Self.fontSizeKey)
         defaults.set(lineSpacing.rawValue, forKey: Self.lineSpacingKey)
+        defaults.set(orientation.rawValue, forKey: Self.orientationKey)
         defaults.set(usesKerning, forKey: Self.usesKerningKey)
         defaults.set(usesReadableWidth, forKey: Self.usesReadableWidthKey)
         defaults.set(readableWidth.rawValue, forKey: Self.readableWidthKey)
@@ -217,7 +221,9 @@ extension EditorSettings {
                 // 日本語のフォールバック先としてOSが選ぶフォントは、全角を文字サイズの約0.92倍に縮めて描くので、明朝体と大きさが揃わない
                 return Self.font(font.fontDescriptor, size: size, japanese: "HiraginoSans-W4") ?? font
             case .serif:
-                return font.fontDescriptor.withDesign(.serif).flatMap { NSFont(descriptor: $0, size: size) } ?? font
+                // 和文のフォールバック先はOSの言語設定で変わり、日本語以外では縦中横に必要なhwidを持たない宋体になる
+                let descriptor = font.fontDescriptor.withDesign(.serif) ?? font.fontDescriptor
+                return Self.font(descriptor, size: size, japanese: "HiraMinProN-W3") ?? font
             }
         }
 
@@ -241,6 +247,25 @@ extension EditorSettings {
                 .cascadeList: [NSFontDescriptor(name: name, size: size)],
             ])
             return NSFont(descriptor: cascaded, size: size)
+        }
+    }
+
+    enum Orientation: String, CaseIterable {
+        case horizontal
+        case vertical
+
+        var layoutOrientation: NSLayoutManager.TextLayoutOrientation {
+            switch self {
+            case .horizontal: .horizontal
+            case .vertical: .vertical
+            }
+        }
+
+        var title: String {
+            switch self {
+            case .horizontal: String(localized: "settings.orientation.horizontal")
+            case .vertical: String(localized: "settings.orientation.vertical")
+            }
         }
     }
 
@@ -271,12 +296,21 @@ extension EditorSettings {
         case standard
         case english
         case japanese
+        case japaneseShort
 
-        var ems: CGFloat {
+        func ems(in orientation: Orientation) -> CGFloat {
             switch self {
-            case .standard: Bundle.main.preferredLocalizations.first == "ja" ? Self.japanese.ems : Self.english.ems
+            case .standard:
+                if orientation == .vertical {
+                    Self.japaneseShort.ems(in: orientation)
+                } else if Bundle.main.preferredLocalizations.first == "ja" {
+                    Self.japanese.ems(in: orientation)
+                } else {
+                    Self.english.ems(in: orientation)
+                }
             case .english: 29
             case .japanese: 40
+            case .japaneseShort: 20
             }
         }
 
@@ -285,6 +319,7 @@ extension EditorSettings {
             case .standard: String(localized: "settings.readableWidth.standard")
             case .english: String(localized: "settings.readableWidth.english")
             case .japanese: String(localized: "settings.readableWidth.japanese")
+            case .japaneseShort: String(localized: "settings.readableWidth.japaneseShort")
             }
         }
     }
@@ -376,20 +411,26 @@ extension EditorSettings {
         fontSize * 2
     }
 
-    var lineNumberWidth: CGFloat {
+    var lineNumberGutter: CGFloat {
         minimumInset * 2
     }
 
-    /// 読みやすい幅で折り返すときは、左右を揃えて本文を中央に置く。揃えると行番号が入らないときは、左を行番号の幅にする
-    func horizontalInsets(clipWidth: CGFloat) -> (leading: CGFloat, trailing: CGFloat) {
-        let minimumLeading = showsLineNumbers ? lineNumberWidth : minimumInset
-        guard usesReadableWidth else { return (minimumLeading, minimumInset) }
-        let maximumWidth = fontSize * readableWidth.ems
-        let centeringInset = ((clipWidth - maximumWidth) / 2).rounded(.down)
-        if centeringInset >= minimumLeading {
+    func lineInsets(
+        clipLength: CGFloat,
+        minimumLeading: CGFloat,
+        minimumTrailing: CGFloat
+    ) -> (leading: CGFloat, trailing: CGFloat) {
+        guard usesReadableWidth else { return (minimumLeading, minimumTrailing) }
+        let maximumLength = fontSize * readableWidth.ems(in: orientation)
+        let centeringInset = ((clipLength - maximumLength) / 2).rounded(.down)
+        if centeringInset >= max(minimumLeading, minimumTrailing) {
             return (centeringInset, centeringInset)
         }
-        return (minimumLeading, max(minimumInset, (clipWidth - maximumWidth - minimumLeading).rounded(.down)))
+        return (minimumLeading, max(minimumTrailing, (clipLength - maximumLength - minimumLeading).rounded(.down)))
+    }
+
+    func crossInsetExpansion(trailing: CGFloat, minimumTrailing: CGFloat) -> CGFloat {
+        min((trailing - minimumTrailing) / 2, fontSize * 4).rounded(.down)
     }
 }
 

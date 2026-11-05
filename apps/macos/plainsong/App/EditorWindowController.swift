@@ -8,8 +8,9 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     let textView: NSTextView
     private let layoutManager: LineHeightSegmentLayoutManager
     /// レイアウトマネージャーはデリゲートを弱参照で持つので、ここで持っておく
-    private let whitespaceMarkers = WhitespaceMarkers()
-    private let markdownHighlighter: MarkdownHighlighter
+    let whitespaceMarkers = WhitespaceMarkers()
+    let markdownHighlighter: MarkdownHighlighter
+    let typesetter: JapaneseTypesetter
     private var selectionObservation: (any NSObjectProtocol)?
     private var clipViewFrameObservation: (any NSObjectProtocol)?
     /// ツールバーを含む高さ。全画面でタイトルバーが隠れても余白が変わらないよう、全画面のあいだは測り直さない
@@ -30,7 +31,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         didSet { statusBar?.lineEndingName = lineEnding.name }
     }
 
-    private var needsMixedLineEndingNotice = false
+    var needsMixedLineEndingNotice = false
 
     var textStorage: NSTextStorage? {
         textView.textStorage
@@ -45,8 +46,10 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         )
         (textView, layoutManager) = Self.makeTextView()
         markdownHighlighter = MarkdownHighlighter(textView: textView)
+        typesetter = JapaneseTypesetter(textView: textView)
         standardSelectedTextAttributes = textView.selectedTextAttributes
         super.init(window: editorWindow)
+        markdownHighlighter.didProcessEdits = { [weak typesetter] range in typesetter?.typeset(range) }
         editorWindow.delegate = self
         editorWindow.titleVisibility = .hidden
         editorWindow.titlebarAppearsTransparent = true
@@ -55,6 +58,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         place()
 
         layoutManager.delegate = whitespaceMarkers
+        scrollView.contentView = EditorClipView()
         scrollView.hasVerticalScroller = true
         scrollView.documentView = textView
         scrollView.autoresizingMask = [.width, .height]
@@ -130,6 +134,14 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         guard settings != self.settings else { return }
         let previous = self.settings
         self.settings = settings
+        let orientationChanged = settings.orientation != previous?.orientation ?? .horizontal
+        if orientationChanged {
+            textView.discardMarkedTextIfNeeded()
+            // 縦書きでは、立てる英数に差し替えた和文のフォントの行間で行送りが広がるので、フォントの行間を使わない
+            // 横書きでは、使わないと明朝体のベースラインがずれる
+            layoutManager.usesFontLeading = settings.orientation == .horizontal
+            textView.setLayoutOrientation(settings.orientation.layoutOrientation)
+        }
         let typesettingChanged = settings.fontFamily != previous?.fontFamily
             || settings.fontSize != previous?.fontSize
             || settings.lineSpacing != previous?.lineSpacing
@@ -147,12 +159,15 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         if themeChanged {
             applyTheme(ThemeLibrary().theme(for: settings.theme))
         }
-        if typesettingChanged || themeChanged || settings.highlightsMarkdown != previous?.highlightsMarkdown {
+        let highlightingChanged = settings.highlightsMarkdown != previous?.highlightsMarkdown
+        if typesettingChanged || themeChanged || orientationChanged || highlightingChanged {
             applyMarkdown()
         }
         applyWhitespace(of: settings)
         applyLineNumbers(of: settings)
-        observeClipViewFrame(settings.usesReadableWidth || settings.showsLineNumbers)
+        observeClipViewFrame(
+            settings.usesReadableWidth || settings.showsLineNumbers || settings.orientation == .vertical
+        )
         applyToolbar(of: settings)
         applyStatusBar(of: settings)
         updateInsets()
@@ -167,23 +182,17 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         let lineHeight = Self.metrics.defaultLineHeight(for: sansSerif)
         let paragraphStyle = settings.paragraphStyle(lineHeight: lineHeight)
         layoutManager.lineHeight = lineHeight
+        let japanese = CTFontCreateForString(font, "あ" as CFString, CFRange(location: 0, length: 1)) as NSFont
+        layoutManager.japaneseMiddle = (japanese.ascender + japanese.descender) / 2
 
         // defaultParagraphStyleは、変換を通さずに入力した文字には付かないので、入力する文字の属性に指定する
         textView.typingAttributes[.font] = font
         textView.typingAttributes[.paragraphStyle] = paragraphStyle
-        // 0を指定すると、欧文のカーニングに加えて、和文の約物の詰めと和欧間の空きも止まる
-        let kern: NSNumber? = settings.usesKerning ? nil : 0
-        textView.typingAttributes[.kern] = kern
         if let storage = textView.textStorage, storage.length > 0 {
-            let range = NSRange(location: 0, length: storage.length)
-            storage.beginEditing()
-            storage.addAttributes([.font: font, .paragraphStyle: paragraphStyle], range: range)
-            if let kern {
-                storage.addAttribute(.kern, value: kern, range: range)
-            } else {
-                storage.removeAttribute(.kern, range: range)
-            }
-            storage.endEditing()
+            storage.addAttributes(
+                [.font: font, .paragraphStyle: paragraphStyle],
+                range: NSRange(location: 0, length: storage.length)
+            )
         }
     }
 
@@ -213,9 +222,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     }
 
     /// `applyFont(of:)`と`applyTheme(_:)`が本文全体のフォントと色を上書きするので、そのあとに呼び直す
+    /// 記法で変えたフォントも立てる英数のフォントに差し替えるので、そのあとに組み直す
     private func applyMarkdown() {
         guard let settings else { return }
         markdownHighlighter.update(flavor: markdownFlavor, appearance: .init(settings: settings, theme: theme))
+        typesetter.update(usesKerning: settings.usesKerning, isVertical: settings.orientation == .vertical)
     }
 
     private func applyWhitespace(of settings: EditorSettings) {
@@ -387,21 +398,49 @@ extension EditorWindowController {
     private func updateInsets() {
         guard let settings else { return }
         let fontSize = settings.fontSize
-        let clipWidth = scrollView.contentView.frame.width
-        let (leadingInset, trailingInset) = settings.horizontalInsets(clipWidth: clipWidth)
-        let verticalExpansion = min((trailingInset - settings.minimumInset) / 2, fontSize * 4).rounded(.down)
-        textView.setHorizontalInsets(leading: leadingInset, trailing: trailingInset, clipWidth: clipWidth)
-        let gutter = settings.lineNumberWidth
-        lineNumberView?.frame = NSRect(x: leadingInset - gutter, y: 0, width: gutter, height: container.bounds.height)
-        statusBar?.leadingInset = leadingInset
-        statusBar?.trailingInset = trailingInset
+        let clipSize = scrollView.contentView.frame.size
         let statusBarHeight = statusBar == nil ? 0 : StatusBar.height
-        setContentInsets(NSEdgeInsets(
-            top: titlebarHeight + fontSize + verticalExpansion,
-            left: 0,
-            bottom: max(statusBarHeight, fontSize) + fontSize + verticalExpansion,
-            right: 0
-        ))
+        let topInset = titlebarHeight + fontSize
+        let bottomInset = max(statusBarHeight, fontSize) + fontSize
+        let isVertical = settings.orientation == .vertical
+        let clipLength = isVertical ? clipSize.height : clipSize.width
+        let gutter = settings.lineNumberGutter
+        let minimumLeading = if isVertical {
+            settings.showsLineNumbers ? topInset + gutter : topInset
+        } else {
+            settings.showsLineNumbers ? gutter : settings.minimumInset
+        }
+        let minimumTrailing = isVertical ? bottomInset : settings.minimumInset
+        let (leading, trailing) = settings.lineInsets(
+            clipLength: clipLength,
+            minimumLeading: minimumLeading,
+            minimumTrailing: minimumTrailing
+        )
+        let expansion = settings.crossInsetExpansion(trailing: trailing, minimumTrailing: minimumTrailing)
+        lineNumberView?.frame = isVertical
+            ? NSRect(x: 0, y: container.bounds.height - leading, width: container.bounds.width, height: gutter)
+            : NSRect(x: leading - gutter, y: 0, width: gutter, height: container.bounds.height)
+        let sideInset = settings.minimumInset + expansion
+        statusBar?.leadingInset = isVertical ? sideInset : leading
+        statusBar?.trailingInset = isVertical ? sideInset : trailing
+        // 縦書きでは上の余白もクリップビューで空ける。テキストコンテナで空けると、テキストビューがタイトルバーに重なってウィンドウをつかめなくなる
+        // 下の余白はテキストコンテナで空ける。テキストビューの外には描けないので、クリップビューで空けると行末の改行の記号が切れる
+        let overhang = LineHeightSegmentLayoutManager.bandOverhang
+        let clipInsets = isVertical
+            ? NSEdgeInsets(top: topInset, left: sideInset - overhang, bottom: 0, right: sideInset - overhang)
+            : NSEdgeInsets(
+                top: topInset + expansion - overhang,
+                left: 0,
+                bottom: bottomInset + expansion - overhang,
+                right: 0
+            )
+        let before = isVertical ? clipInsets.top : 0
+        textView.setLineInsets(leading: leading - before, trailing: trailing, clipLength: clipLength - before)
+        // 大きさが0のウィンドウで縦書きに組むと、テキストビューの原点が行末の余白の分だけずれ、横書きに切り替えても残る
+        if textView.frame.origin != .zero {
+            textView.setFrameOrigin(.zero)
+        }
+        setContentInsets(clipInsets)
         scrollView.scrollerInsets = NSEdgeInsets(top: 0, left: 0, bottom: statusBarHeight, right: 0)
     }
 
@@ -409,66 +448,27 @@ extension EditorWindowController {
     private func setContentInsets(_ insets: NSEdgeInsets) {
         let clipView = scrollView.contentView
         let previous = clipView.contentInsets
-        guard previous.top != insets.top || previous.bottom != insets.bottom else { return }
+        guard (previous.top, previous.left, previous.bottom, previous.right)
+            != (insets.top, insets.left, insets.bottom, insets.right)
+        else { return }
         let visible = clipView.bounds
-        let isAtTop = visible.minY <= -previous.top
-        let isAtBottom = visible.maxY >= textView.frame.height + previous.bottom
-        clipView.contentInsets = insets
-        let originY: CGFloat
-        if isAtTop {
-            originY = -insets.top
-        } else if isAtBottom {
-            originY = textView.frame.height + insets.bottom - visible.height
-        } else {
-            return
-        }
-        clipView.scroll(to: NSPoint(x: visible.minX, y: originY))
-        scrollView.reflectScrolledClipView(clipView)
-    }
-}
-
-extension EditorWindowController: NSTextViewDelegate {
-    func textView(
-        _: NSTextView,
-        shouldChangeTypingAttributes _: [String: Any],
-        toAttributes attributes: [NSAttributedString.Key: Any]
-    ) -> [NSAttributedString.Key: Any] {
-        markdownHighlighter.plainAttributes(attributes)
-    }
-
-    /// NSTextViewは、改行キーでいつも\nを入れる
-    func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
-        guard lineEnding != .lf,
-              selector == #selector(NSResponder.insertNewline(_:))
-              || selector == #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:))
-        else { return false }
-        textView.insertText(lineEnding.rawValue, replacementRange: NSRange(location: NSNotFound, length: 0))
-        return true
-    }
-
-    /// 状態の復元で後ろに開いたウィンドウでは気づけないので、ウィンドウがキーになるまで待つ
-    func noticeMixedLineEndings() {
-        needsMixedLineEndingNotice = true
-        presentMixedLineEndingNoticeIfNeeded()
-    }
-
-    func windowDidBecomeKey(_: Notification) {
-        presentMixedLineEndingNoticeIfNeeded()
-    }
-
-    private func presentMixedLineEndingNoticeIfNeeded() {
-        guard needsMixedLineEndingNotice, editorWindow.isKeyWindow, editorWindow.attachedSheet == nil else { return }
-        needsMixedLineEndingNotice = false
-        let suppressionKey = "suppressesMixedLineEndingNotice"
-        guard !UserDefaults.standard.bool(forKey: suppressionKey) else { return }
-        let alert = NSAlert()
-        alert.messageText = String(localized: "alert.mixedLineEndings.title")
-        alert.informativeText = String(localized: "alert.mixedLineEndings.message \(lineEnding.name)")
-        alert.showsSuppressionButton = true
-        alert.beginSheetModal(for: editorWindow) { _ in
-            if alert.suppressionButton?.state == .on {
-                UserDefaults.standard.set(true, forKey: suppressionKey)
+        let size = textView.frame.size
+        var origin = visible.origin
+        if textView.layoutOrientation == .vertical {
+            origin.y = -insets.top
+            if visible.maxX >= size.width + previous.right {
+                origin.x = size.width + insets.right - visible.width
+            } else if visible.minX <= -previous.left {
+                origin.x = -insets.left
             }
+        } else if visible.minY <= -previous.top {
+            origin.y = -insets.top
+        } else if visible.maxY >= size.height + previous.bottom {
+            origin.y = size.height + insets.bottom - visible.height
         }
+        clipView.contentInsets = insets
+        guard origin != visible.origin else { return }
+        clipView.scroll(to: clipView.constrainBoundsRect(NSRect(origin: origin, size: visible.size)).origin)
+        scrollView.reflectScrolledClipView(clipView)
     }
 }
