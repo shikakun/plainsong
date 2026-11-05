@@ -161,8 +161,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             }
         }
         if placement.showsInMenuBar, menuBarIcon == nil {
-            menuBarIcon = MenuBarIcon {
-                NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: .init())
+            menuBarIcon = MenuBarIcon { [weak self] in
+                NSApp.activate()
+                self?.showEditors()
             }
         } else if !placement.showsInMenuBar, let menuBarIcon {
             menuBarIcon.remove()
