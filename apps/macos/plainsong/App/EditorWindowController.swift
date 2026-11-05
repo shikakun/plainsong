@@ -166,7 +166,9 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         }
         applyWhitespace(of: settings)
         applyLineNumbers(of: settings)
-        observeClipViewFrame(settings.usesReadableWidth || settings.showsLineNumbers)
+        observeClipViewFrame(
+            settings.usesReadableWidth || settings.showsLineNumbers || settings.orientation == .vertical
+        )
         applyToolbar(of: settings)
         applyStatusBar(of: settings)
         updateInsets()
@@ -457,7 +459,7 @@ extension EditorWindowController {
         }
         clipView.contentInsets = insets
         guard origin != visible.origin else { return }
-        clipView.scroll(to: origin)
+        clipView.scroll(to: clipView.constrainBoundsRect(NSRect(origin: origin, size: visible.size)).origin)
         scrollView.reflectScrolledClipView(clipView)
     }
 }
