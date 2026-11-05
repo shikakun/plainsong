@@ -1,5 +1,15 @@
 # macos
 
+## 1.3.0
+
+### Minor Changes
+
+- 016e041: 縦書きで書けるようになりました。設定の「組方向」で、横書きと縦書きを切り替えられます。
+  あわせて、細かな不具合を修正しました。
+  
+  You can now write vertically. Use Orientation in Settings to switch between Horizontal and Vertical.
+  This update also includes minor bug fixes.
+
 ## 1.2.0
 
 Markdownファイル（拡張子 .md, .markdown, .mdx）を編集できるようになりました。  
