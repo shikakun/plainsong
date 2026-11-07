@@ -409,11 +409,8 @@ extension EditorWindowController {
         let isVertical = settings.orientation == .vertical
         let clipLength = isVertical ? clipSize.height : clipSize.width
         let gutter = settings.lineNumberGutter
-        let minimumLeading = if isVertical {
-            settings.showsLineNumbers ? topInset + gutter : topInset
-        } else {
-            settings.showsLineNumbers ? gutter : settings.minimumInset
-        }
+        let baseLeading = isVertical ? topInset : settings.minimumInset
+        let minimumLeading = settings.showsLineNumbers ? baseLeading + gutter / 2 : baseLeading
         let minimumTrailing = isVertical ? bottomInset : settings.minimumInset
         if settings.showsManuscriptGuide {
             applyManuscriptCells(settings.manuscriptCells(
