@@ -132,19 +132,24 @@ struct DocumentPrintingTests {
         #expect(printed.joined().count { $0 == "印" } == 40)
     }
 
-    private func inkedPixels(printedBy operation: NSPrintOperation, to url: URL) throws -> Int {
+    /// ページの1ページ目を画素にする。画素は左上から行ごとに並ぶ
+    private func renderedPixels(
+        printedBy operation: NSPrintOperation,
+        to url: URL
+    ) throws -> (pixels: [UInt8], width: Int) {
         defer { try? FileManager.default.removeItem(at: url) }
         operation.showsPrintPanel = false
         operation.showsProgressPanel = false
         #expect(operation.run())
         let page = try #require(PDFDocument(url: url)?.page(at: 0))
         let bounds = page.bounds(for: .mediaBox)
+        let width = Int(bounds.width)
         let context = try #require(CGContext(
             data: nil,
-            width: Int(bounds.width),
+            width: width,
             height: Int(bounds.height),
             bitsPerComponent: 8,
-            bytesPerRow: 0,
+            bytesPerRow: width,
             space: CGColorSpaceCreateDeviceGray(),
             bitmapInfo: CGImageAlphaInfo.none.rawValue
         ))
@@ -152,11 +157,12 @@ struct DocumentPrintingTests {
         context.fill(CGRect(origin: .zero, size: bounds.size))
         page.draw(with: .mediaBox, to: context)
         let data = try #require(context.data)
-        let pixels = UnsafeRawBufferPointer(start: data, count: context.bytesPerRow * context.height)
-        return (0 ..< context.height).reduce(0) { total, row in
-            let start = row * context.bytesPerRow
-            return total + pixels[start ..< start + context.width].count { $0 < 250 }
-        }
+        let buffer = UnsafeRawBufferPointer(start: data, count: width * context.height)
+        return (Array(buffer), width)
+    }
+
+    private func inkedPixels(printedBy operation: NSPrintOperation, to url: URL) throws -> Int {
+        try renderedPixels(printedBy: operation, to: url).pixels.count { $0 < 250 }
     }
 
     /// 本文がなくてもマス目は印刷し、選択を外せば消える
@@ -189,5 +195,25 @@ struct DocumentPrintingTests {
         let horizontal = try ink(.horizontal)
         #expect(horizontal > 0)
         #expect(abs(vertical - horizontal) * 4 < horizontal, "\(vertical), \(horizontal)")
+    }
+
+    /// 字間を指定して組むとフォントの文字ペアの詰めが効き、モチベーションのーなどから後ろがマスからずれる
+    /// 空白のあとの国と、詰めが効く文字のあとの国は同じマスにあるので、同じ画素になる
+    @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical])
+    func printsCharactersInTheirCellsAfterKerningPairs(orientation: EditorSettings.Orientation) throws {
+        func rendered(_ text: String) throws -> (pixels: [UInt8], width: Int) {
+            let url = temporaryURL()
+            let printOperation = operation(text, orientation: orientation, showsManuscriptGuide: true, savingTo: url)
+            let view = try #require(printOperation.view as? DocumentPrintView)
+            view.showsManuscriptGrid = false
+            view.showsPageNumbers = false
+            return try renderedPixels(printedBy: printOperation, to: url)
+        }
+        let alone = try rendered(String(repeating: "　", count: 8) + "国")
+        let afterPairs = try rendered("モチベーションで国")
+        let ink = alone.pixels.indices.filter { alone.pixels[$0] < 128 }
+        #expect(ink.count > 10)
+        let differing = ink.count { afterPairs.pixels[$0] >= 128 }
+        #expect(differing * 20 < ink.count, "\(differing) / \(ink.count)")
     }
 }

@@ -78,6 +78,14 @@ struct ManuscriptPaperTests {
         }
     }
 
+    /// 字下げとタブのマスを飛ばし、2桁の数字は1マスに入れる。タブは次の偶数のマスまで進む
+    @Test
+    func placesCharactersInCells() {
+        let placements = ManuscriptPaper(indent: 1).placements(in: "あ\tい12う\n\nえ" as NSString)
+        #expect(placements.map { $0.map(\.cell) } == [[1, 4, 5, 6], [], [1]])
+        #expect(placements[0][2].range == NSRange(location: 3, length: 2))
+    }
+
     @Test
     func roundsPartialPagesUp() {
         #expect(ManuscriptPaper.pages(forLines: 0) == 0)

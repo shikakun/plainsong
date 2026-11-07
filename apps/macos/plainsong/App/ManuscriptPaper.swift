@@ -9,6 +9,12 @@ nonisolated struct ManuscriptPaper: Equatable {
         var cells: Int
     }
 
+    /// 文字を置くマス。字下げとタブのマスも数える
+    struct Placement: Equatable {
+        var range: NSRange
+        var cell: Int
+    }
+
     private struct Unit {
         var length: Int
         var scalar: Unicode.Scalar?
@@ -42,8 +48,54 @@ nonisolated struct ManuscriptPaper: Equatable {
 
     func lines(in string: NSString, range: NSRange? = nil) -> [Line] {
         let range = range ?? NSRange(location: 0, length: string.length)
-        let rangeEnd = NSMaxRange(range)
         var lines: [Line] = []
+        enumerateContents(in: string, range: range) { contents, terminatorLength in
+            appendLines(
+                of: Self.units(of: contents, in: string),
+                indent: indent(ofContents: contents, in: string),
+                terminatorLength: terminatorLength,
+                to: &lines
+            )
+        }
+        return lines
+    }
+
+    /// 行ごとに、文字を置くマスを返す。タブには文字がないので含めない
+    func placements(in string: NSString) -> [[Placement]] {
+        var lines: [[Placement]] = []
+        enumerateContents(in: string, range: NSRange(location: 0, length: string.length)) { contents, _ in
+            let units = Self.units(of: contents, in: string)
+            guard !units.isEmpty else {
+                lines.append([])
+                return
+            }
+            var start = 0
+            var cells = indent(ofContents: contents, in: string)
+            var location = contents.location
+            while start < units.count {
+                let end = Self.lineEnd(from: start, cells: cells, in: units)
+                var line: [Placement] = []
+                for unit in units[start ..< end] {
+                    if !unit.isTab {
+                        line.append(Placement(range: NSRange(location: location, length: unit.length), cell: cells))
+                    }
+                    cells += Self.width(of: unit, at: cells)
+                    location += unit.length
+                }
+                lines.append(line)
+                start = end
+                cells = 0
+            }
+        }
+        return lines
+    }
+
+    private func enumerateContents(
+        in string: NSString,
+        range: NSRange,
+        body: (_ contents: NSRange, _ terminatorLength: Int) -> Void
+    ) {
+        let rangeEnd = NSMaxRange(range)
         var location = range.location
         while location < rangeEnd {
             var lineEnd = 0
@@ -56,16 +108,9 @@ nonisolated struct ManuscriptPaper: Equatable {
             )
             lineEnd = min(lineEnd, rangeEnd)
             contentsEnd = min(contentsEnd, rangeEnd)
-            let contents = NSRange(location: location, length: contentsEnd - location)
-            appendLines(
-                of: Self.units(of: contents, in: string),
-                indent: indent(ofContents: contents, in: string),
-                terminatorLength: lineEnd - contentsEnd,
-                to: &lines
-            )
+            body(NSRange(location: location, length: contentsEnd - location), lineEnd - contentsEnd)
             location = lineEnd
         }
-        return lines
     }
 
     /// `location`から始まる行が使うマスの数を返す。TextKitが行を組むたびに呼ぶので、行が決まるだけの文字しか読まない

@@ -16,11 +16,6 @@ private struct ManuscriptPageGeometry {
         cell * Self.fontRatio
     }
 
-    /// 文字の空きを行の方向に分けて、文字がマスの中央にくるようにする
-    var tracking: CGFloat {
-        cell - fontSize
-    }
-
     init(lineLength: CGFloat, crossLength: CGFloat) {
         let columns = CGFloat(Self.columns)
         // ぶら下げる句読点の分を、行の方向に1マス空ける
@@ -87,6 +82,8 @@ final class DocumentPrintView: NSView {
     private var pageSize = NSSize.zero
     private var pages: [Page] = []
     private var manuscriptGeometry: ManuscriptPageGeometry?
+    /// ページごとの、行ごとの文字の位置
+    private var manuscriptPages: [[[ManuscriptPaper.Placement]]] = []
     /// 横書きで行の中心にくる、和文の字面の中心の、ベースラインからの高さ
     private var japaneseMiddle: CGFloat = 0
 
@@ -99,6 +96,10 @@ final class DocumentPrintView: NSView {
 
     private var isVertical: Bool {
         settings.orientation == .vertical
+    }
+
+    private var pageCount: Int {
+        manuscriptGeometry == nil ? pages.count : manuscriptPages.count
     }
 
     override var isFlipped: Bool {
@@ -143,12 +144,12 @@ final class DocumentPrintView: NSView {
             width: (info.paperSize.width - info.leftMargin - info.rightMargin) / info.scalingFactor,
             height: (info.paperSize.height - info.topMargin - info.bottomMargin) / info.scalingFactor
         )
-        if size != pageSize || pages.isEmpty {
+        if size != pageSize || pageCount == 0 {
             pageSize = size
             typeset()
-            setFrameSize(NSSize(width: size.width, height: size.height * CGFloat(pages.count)))
+            setFrameSize(NSSize(width: size.width, height: size.height * CGFloat(pageCount)))
         }
-        range.pointee = NSRange(location: 1, length: pages.count)
+        range.pointee = NSRange(location: 1, length: pageCount)
         return true
     }
 
@@ -197,47 +198,22 @@ final class DocumentPrintView: NSView {
         self.pages = pages
     }
 
-    /// 行の位置は組むときの位置によらずマスで決めるので、行間は組み方に影響しない
+    /// 文字をマスより小さく置くために字間を指定すると、フォントの文字ペアの詰めが効いてマスからずれるので、TextKitでは組まず1字ずつ置く
     private func typesetManuscript() {
         let geometry = ManuscriptPageGeometry(
             lineLength: isVertical ? pageSize.height : pageSize.width,
             crossLength: isVertical ? pageSize.width : pageSize.height
         )
         manuscriptGeometry = geometry
-        var cellSettings = settings
-        cellSettings.fontSize = geometry.cell
-        var fontSettings = settings
-        fontSettings.fontSize = geometry.fontSize
         let body = settings.fontFamily.font(ofSize: geometry.fontSize)
         let font = CTFontCreateForString(body, "あ" as CFString, CFRange(location: 0, length: 1)) as NSFont
         japaneseMiddle = (font.ascender + font.descender) / 2
+        setBodyText(font: font, paragraphStyle: .default)
+        JapaneseTypesetter(textView: textView).update(usesKerning: false, isVertical: isVertical, isManuscript: true)
 
-        layoutManager.usesFontLeading = false
-        (textView.textContainer as? ManuscriptTextContainer)?.paper = settings.manuscriptPaper
-        (textView.textContainer as? ManuscriptTextContainer)?.cellWidth = geometry.cell
-        textView.textContainer?.size = NSSize(
-            width: geometry.cell * CGFloat(ManuscriptPaper.cellsPerLine),
-            height: CGFloat.greatestFiniteMagnitude
-        )
-        setBodyText(
-            font: font,
-            // 字下げとタブはマスを単位にする
-            paragraphStyle: cellSettings.paragraphStyle(
-                lineHeight: EditorWindowController.lineHeight(of: fontSettings)
-            )
-        )
-        JapaneseTypesetter(textView: textView).update(
-            usesKerning: false,
-            isVertical: isVertical,
-            isManuscript: true,
-            tracking: geometry.tracking
-        )
-
-        // TextKitは末尾の改行のあとにも空の行を組むが、枚数には数えないので、印刷でも枚数と揃える
-        let lineCount = settings.manuscriptPaper.count(in: text as NSString)
-        let lines = Array(placedLines().prefix(lineCount))
-        pages = stride(from: 0, to: max(lines.count, 1), by: ManuscriptPaper.linesPerPage).map { start in
-            Page(start: 0, lines: Array(lines[start ..< min(start + ManuscriptPaper.linesPerPage, lines.count)]))
+        let lines = settings.manuscriptPaper.placements(in: text as NSString)
+        manuscriptPages = stride(from: 0, to: max(lines.count, 1), by: ManuscriptPaper.linesPerPage).map { start in
+            Array(lines[start ..< min(start + ManuscriptPaper.linesPerPage, lines.count)])
         }
     }
 
@@ -260,7 +236,7 @@ final class DocumentPrintView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
-        for (index, page) in pages.enumerated() where rectForPage(index + 1).intersects(dirtyRect) {
+        for index in 0 ..< pageCount where rectForPage(index + 1).intersects(dirtyRect) {
             context.saveGState()
             context.translateBy(x: 0, y: rectForPage(index + 1).minY)
             if isVertical {
@@ -269,9 +245,9 @@ final class DocumentPrintView: NSView {
                 context.rotate(by: .pi / 2)
             }
             if let manuscriptGeometry {
-                drawManuscriptPage(page, geometry: manuscriptGeometry, in: context)
+                drawManuscriptPage(manuscriptPages[index], geometry: manuscriptGeometry, in: context)
             } else {
-                drawDocumentPage(page, in: context)
+                drawDocumentPage(pages[index], in: context)
             }
             context.restoreGState()
         }
@@ -287,23 +263,53 @@ final class DocumentPrintView: NSView {
         }
     }
 
-    private func drawManuscriptPage(_ page: Page, geometry: ManuscriptPageGeometry, in context: CGContext) {
+    private func drawManuscriptPage(
+        _ lines: [[ManuscriptPaper.Placement]],
+        geometry: ManuscriptPageGeometry,
+        in context: CGContext
+    ) {
         if showsManuscriptGrid {
             geometry.drawGrid(in: context)
         }
-        for (column, placed) in page.lines.enumerated() {
-            // 縦書きでは行の中心がglyphOriginの高さに、横書きでは和文の字面の中心がその上にくる
-            let bounds = placed.line.typographicBounds
-            let middle = geometry.middle(ofColumn: column) + (isVertical ? 0 : japaneseMiddle)
-            draw(
-                placed,
-                at: CGPoint(
-                    x: geometry.lineStart + placed.fragmentOrigin.x + geometry.tracking / 2,
-                    y: middle - bounds.minY - placed.line.glyphOrigin.y
-                ),
-                in: context
+        for (column, line) in lines.enumerated() {
+            for placement in line {
+                let center = CGPoint(
+                    x: geometry.lineStart + (CGFloat(placement.cell) + 0.5) * geometry.cell,
+                    y: geometry.middle(ofColumn: column)
+                )
+                drawCharacter(in: placement.range, centeredAt: center, in: context)
+            }
+        }
+    }
+
+    private func drawCharacter(in range: NSRange, centeredAt center: CGPoint, in context: CGContext) {
+        guard let storage = textView.textStorage else { return }
+        context.saveGState()
+        defer { context.restoreGState() }
+        context.textMatrix = .identity
+        context.translateBy(x: center.x, y: center.y)
+        let character = NSMutableAttributedString(attributedString: storage.attributedSubstring(from: range))
+        let kind = storage.attribute(.uprightGlyphs, at: range.location, effectiveRange: nil) as? Int
+        if kind == UprightGlyphs.Kind.tateChuYoko.rawValue {
+            context.rotate(by: -.pi / 2)
+            UprightGlyphs.drawCentered(character, in: context)
+            return
+        }
+        if isVertical {
+            character.addAttribute(
+                .verticalGlyphForm,
+                value: 1,
+                range: NSRange(location: 0, length: character.length)
             )
         }
+        let line = CTLineCreateWithAttributedString(character)
+        // 縦書きではベースラインが列の中心を通り、横書きでは和文の字面の中心がその上にくる
+        context.scaleBy(x: 1, y: -1)
+        context.textPosition = CGPoint(
+            x: -CTLineGetTypographicBounds(line, nil, nil, nil) / 2,
+            y: isVertical ? 0 : -japaneseMiddle
+        )
+        CTLineDraw(line, context)
     }
 
     private func draw(_ placed: PlacedLine, at point: CGPoint, in context: CGContext) {

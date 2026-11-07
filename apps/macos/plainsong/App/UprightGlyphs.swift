@@ -25,12 +25,9 @@ nonisolated enum UprightGlyphs {
 
     private struct Cell {
         var square: CGRect
-        /// 字間を空けて組むと、倒れた字面が`square`からはみ出すので、印刷ではマス全体を切り抜く
-        var wholeCell: CGRect
         var line: NSTextLineFragment
         var lineOrigin: CGPoint
         var digits: NSAttributedString
-        var ink: CGRect
     }
 
     static func runs(in string: NSString, range: NSRange) -> [Run] {
@@ -173,7 +170,7 @@ nonisolated enum UprightGlyphs {
         context.saveGState()
         let clip = CGMutablePath()
         clip.addRect(context.boundingBoxOfClipPath)
-        cells.forEach { clip.addRect(drawsOnlyDigits ? $0.wholeCell : $0.square) }
+        cells.forEach { clip.addRect($0.square) }
         context.addPath(clip)
         context.clip(using: .evenOdd)
         drawText()
@@ -181,11 +178,11 @@ nonisolated enum UprightGlyphs {
 
         for cell in cells {
             context.saveGState()
-            context.clip(to: drawsOnlyDigits ? cell.wholeCell : cell.square)
+            context.clip(to: cell.square)
             context.translateBy(x: cell.square.midX, y: cell.square.midY)
             context.rotate(by: -.pi / 2)
             if drawsOnlyDigits {
-                drawDigits(of: cell, in: context)
+                drawCentered(cell.digits, in: context)
             } else {
                 context.translateBy(x: -cell.square.midX, y: -cell.square.midY)
                 cell.line.draw(at: cell.lineOrigin, in: context)
@@ -194,12 +191,14 @@ nonisolated enum UprightGlyphs {
         }
     }
 
-    /// 印刷では、行全体を描き直すと切り抜いた外の文字もPDFに残り、検索やコピーで重複する
-    private static func drawDigits(of cell: Cell, in context: CGContext) {
-        // 本文は上から下へ組むので、Core Textの上向きの座標に合わせて反転する
+    /// 印刷では、行全体を描き直すと切り抜いた外の文字もPDFに残り、検索やコピーで重複するので、数字だけを描く
+    /// 字面の中心が今の原点にくる。本文は上から下へ組むので、Core Textの上向きの座標に合わせて反転する
+    static func drawCentered(_ digits: NSAttributedString, in context: CGContext) {
+        let line = CTLineCreateWithAttributedString(digits)
+        let ink = CTLineGetBoundsWithOptions(line, .useGlyphPathBounds)
         context.scaleBy(x: 1, y: -1)
-        context.textPosition = CGPoint(x: -cell.ink.midX, y: -cell.ink.midY)
-        CTLineDraw(CTLineCreateWithAttributedString(cell.digits), context)
+        context.textPosition = CGPoint(x: -ink.midX, y: -ink.midY)
+        CTLineDraw(line, context)
     }
 
     private static func tateChuYokoCells(
@@ -225,11 +224,9 @@ nonisolated enum UprightGlyphs {
                 let inkCenter = minX + ink.midX
                 cells.append(Cell(
                     square: CGRect(x: inkCenter - side / 2, y: center - side / 2, width: side, height: side),
-                    wholeCell: CGRect(x: minX, y: center - advance / 2, width: advance, height: advance),
                     line: line,
                     lineOrigin: bounds.origin,
-                    digits: digits,
-                    ink: ink
+                    digits: digits
                 ))
             }
         }
