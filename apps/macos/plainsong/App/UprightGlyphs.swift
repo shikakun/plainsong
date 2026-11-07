@@ -11,7 +11,6 @@ nonisolated enum UprightGlyphs {
     enum Kind: Int {
         case upright = 1
         case tateChuYoko = 2
-        /// 横書きの原稿用紙で、2桁の数字を半角のまま1マスに入れる
         case halfWidthPair = 3
         case emoji = 4
     }

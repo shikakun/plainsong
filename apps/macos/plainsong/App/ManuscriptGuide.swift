@@ -33,7 +33,7 @@ final nonisolated class ManuscriptTextContainer: NSTextContainer {
     }
 }
 
-/// 本文の行は一定の間隔で並ぶので、マス目は本文を見ずに描ける。文字より先に描く必要はないので、行番号と同じく本文に重ねる
+/// 本文の行は一定の間隔で並ぶので、マス目は本文を見ずに描ける
 final class ManuscriptGridView: NSView {
     private let textView: NSTextView
 
@@ -95,7 +95,7 @@ final class ManuscriptGridView: NSView {
         needsDisplay = true
     }
 
-    /// 組むときの座標での、行の中心の位置を返す。縦書きでは右の列からの距離になる
+    /// 組むときの座標で返す。縦書きでは右の列からの距離になる
     func middle(ofLine line: Int) -> CGFloat? {
         guard let layoutManager = textView.textLayoutManager,
               let start = layoutManager.textContentManager?.documentRange.location,

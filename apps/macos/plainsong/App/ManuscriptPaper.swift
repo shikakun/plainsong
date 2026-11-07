@@ -1,6 +1,6 @@
 import Foundation
 
-/// 原稿用紙に組んだときの行を求める。枚数と印刷は400字詰めで数え、画面だけ1行のマス数を変えられる。フォントには左右されない
+/// 枚数と印刷は400字詰めで数え、画面だけ1行のマス数を変えられる
 nonisolated struct ManuscriptPaper: Equatable {
     struct Line: Equatable {
         /// 改行も含めた、UTF-16での長さ
@@ -9,7 +9,6 @@ nonisolated struct ManuscriptPaper: Equatable {
         var cells: Int
     }
 
-    /// 文字を置くマス。字下げとタブのマスも数える
     struct Placement: Equatable {
         var range: NSRange
         var cell: Int
@@ -35,7 +34,6 @@ nonisolated struct ManuscriptPaper: Equatable {
     )
     private static let notEnding = Set("(（[［｛〔〈《「『【〘〖〝‘“｟«\"'".unicodeScalars)
 
-    /// 段落の字下げのマスの数
     var indent = 0
     var cellsPerLine = Self.standardCellsPerLine
 
@@ -61,7 +59,6 @@ nonisolated struct ManuscriptPaper: Equatable {
         return lines
     }
 
-    /// 行ごとに、文字を置くマスを返す。タブには文字がないので含めない
     func placements(in string: NSString) -> [[Placement]] {
         var lines: [[Placement]] = []
         enumerateContents(in: string, range: NSRange(location: 0, length: string.length)) { contents, _ in
@@ -114,7 +111,7 @@ nonisolated struct ManuscriptPaper: Equatable {
         }
     }
 
-    /// `location`から始まる行が使うマスの数を返す。TextKitが行を組むたびに呼ぶので、行が決まるだけの文字しか読まない
+    /// TextKitが行を組むたびに呼ぶので、行が決まるだけの文字しか読まない
     func cells(ofLineAt location: Int, in string: NSString) -> Int {
         guard location < string.length else { return 0 }
         var length = cellsPerLine * 3
@@ -225,7 +222,6 @@ nonisolated struct ManuscriptPaper: Equatable {
         while candidate > start, !Self.canBreak(before: candidate, in: units) {
             candidate -= 1
         }
-        // 禁則の文字だけが続いて送る先がないときは、マスいっぱいで折り返す
         return candidate > start ? candidate : end
     }
 
@@ -233,7 +229,6 @@ nonisolated struct ManuscriptPaper: Equatable {
         units[range].reduce(startCells) { $0 + width(of: $1, at: $0) }
     }
 
-    /// タブは次のタブストップまで進むので、幅は行の中の位置で決まる
     private static func width(of unit: Unit, at cells: Int) -> Int {
         unit.isTab ? cellsPerTab - cells % cellsPerTab : 1
     }

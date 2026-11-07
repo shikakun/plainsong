@@ -340,7 +340,6 @@ final class GeneralSettingsPane: SettingsPane {
 }
 
 extension GeneralSettingsPane {
-    /// 原稿用紙のガイドでは効かない項目。設定値は残すので、ガイドをオフにすると元に戻る
     private func updateControlsIgnoredByManuscriptGuide(with settings: EditorSettings) {
         for control: NSControl in [
             kerningCheckbox, paragraphSpacingCheckbox, paragraphSpacingButton, markdownCheckbox,

@@ -1,9 +1,7 @@
 import AppKit
 
-/// 原稿用紙の1ページの中の位置。行の方向の長さと、列を並べる方向の長さから求める
 private struct ManuscriptPageGeometry {
     private static let columns = ManuscriptPaper.linesPerPage
-    /// マスの大きさに対する、文字の大きさと行送り
     private static let fontRatio: CGFloat = 0.72
     private static let pitchRatio: CGFloat = 1.4
 
@@ -82,9 +80,7 @@ final class DocumentPrintView: NSView {
     private var pageSize = NSSize.zero
     private var pages: [Page] = []
     private var manuscriptGeometry: ManuscriptPageGeometry?
-    /// ページごとの、行ごとの文字の位置
     private var manuscriptPages: [[[ManuscriptPaper.Placement]]] = []
-    /// 横書きで行の中心にくる、和文の字面の中心の、ベースラインからの高さ
     private var japaneseMiddle: CGFloat = 0
 
     var showsPageNumbers: Bool

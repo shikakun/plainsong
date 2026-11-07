@@ -455,7 +455,6 @@ extension EditorSettings {
         return (minimumLeading, max(minimumTrailing, (clipLength - maximumLength - minimumLeading).rounded(.down)))
     }
 
-    /// 画面の原稿用紙の1行のマス数。読みやすい幅は上限で、ウィンドウに入らないときはマスを減らす。マスを欠けさせないので、余りは行末の余白にする
     func manuscriptCells(clipLength: CGFloat, minimumLeading: CGFloat, minimumTrailing: CGFloat) -> Int {
         let fitting = max(Int((clipLength - minimumLeading - minimumTrailing) / fontSize), 1)
         return usesReadableWidth ? min(Int(readableWidth.ems(in: orientation)), fitting) : fitting
