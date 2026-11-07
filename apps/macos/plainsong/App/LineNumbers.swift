@@ -1,10 +1,34 @@
 import AppKit
 
-/// 本文の行頭の側の余白に重ね、改行のあとに始まる行に番号を描く。描くのは見えている行だけ
+extension EditorSettings {
+    enum LineNumberUnit: String, CaseIterable {
+        case paragraph
+        case line
+
+        var title: String {
+            switch self {
+            case .paragraph: String(localized: "settings.lineNumberUnit.paragraph")
+            case .line: String(localized: "settings.lineNumberUnit.line")
+            }
+        }
+    }
+}
+
+/// 本文の行頭の側の余白に重ね、段落ごとなら改行のあとに始まる行に、行ごとなら折り返した行にも番号を描く。描くのは見えている行だけ
 final class LineNumberView: NSView {
     private let textView: NSTextView
     /// 前回描いたときの、先頭の段落の位置と行番号。そこから数えれば、文書の先頭から数え直さずに済む
     private var anchor: (location: Int, number: Int)?
+    /// 行ごとに数えた`anchor`は折り返しで変わるので、数えたときのテキストコンテナの大きさを覚えておく
+    private var anchorContainerSize: CGSize?
+
+    var unit = EditorSettings.LineNumberUnit.paragraph {
+        didSet {
+            guard unit != oldValue else { return }
+            anchor = nil
+            needsDisplay = true
+        }
+    }
 
     private var font = NSFont.monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
 
@@ -82,8 +106,10 @@ final class LineNumberView: NSView {
 
     @objc private func textDidProcessEditing(_ notification: Notification) {
         needsDisplay = true
+        // 行ごとに数えるときは、フォントなど属性の変更でも折り返しが変わる
+        let mask: NSTextStorageEditActions = unit == .line ? [.editedCharacters, .editedAttributes] : .editedCharacters
         guard let anchor, let storage = notification.object as? NSTextStorage,
-              storage.editedMask.contains(.editedCharacters),
+              !storage.editedMask.isDisjoint(with: mask),
               storage.editedRange.location < anchor.location
         else { return }
         self.anchor = nil
@@ -112,6 +138,10 @@ final class LineNumberView: NSView {
             ?? layoutManager.textViewportLayoutController.viewportRange?.location
             ?? documentStart
         var number: Int?
+        // 番号を描きながらそれより前をレイアウトすると、描いている途中で位置がずれるので、先に数える
+        if unit == .line {
+            number = lineNumber(at: contentManager.offset(from: documentStart, to: start), in: layoutManager) - 1
+        }
         layoutManager.enumerateTextLayoutFragments(from: start, options: [.ensuresLayout]) { fragment in
             let frame = fragment.layoutFragmentFrame.offsetBy(dx: origin.x, dy: origin.y)
             guard frame.minY < visible.maxY,
@@ -123,7 +153,8 @@ final class LineNumberView: NSView {
             ) - 1
             for line in fragment.textLineFragments {
                 let lineStart = line.characterRange.location
-                guard lineStart == 0 || Self.isLineBreak(paragraph.character(at: lineStart - 1)) else { continue }
+                guard unit == .line || lineStart == 0 || Self.isLineBreak(paragraph.character(at: lineStart - 1))
+                else { continue }
                 current += 1
                 let bounds = line.typographicBounds.offsetBy(dx: frame.minX, dy: frame.minY)
                 guard bounds.maxY >= visible.minY else { continue }
@@ -143,21 +174,47 @@ final class LineNumberView: NSView {
     }
 
     private func lineNumber(at location: Int, in string: NSString) -> Int {
+        lineNumber(at: location) { range in
+            Self.lineBreakCount(in: string, range: range)
+        }
+    }
+
+    private func lineNumber(at location: Int, in layoutManager: NSTextLayoutManager) -> Int {
+        let containerSize = textView.textContainer?.size
+        if containerSize != anchorContainerSize {
+            anchor = nil
+            anchorContainerSize = containerSize
+        }
+        return lineNumber(at: location) { range in
+            Self.lineFragmentCount(in: range, of: layoutManager)
+        }
+    }
+
+    /// `count`には、段落の先頭から段落の先頭までの範囲を渡す
+    private func lineNumber(at location: Int, count: (NSRange) -> Int) -> Int {
         let number = if let anchor, anchor.location <= location {
-            anchor.number + Self.lineBreakCount(
-                in: string,
-                range: NSRange(location: anchor.location, length: location - anchor.location)
-            )
+            anchor.number + count(NSRange(location: anchor.location, length: location - anchor.location))
         } else if let anchor {
-            anchor.number - Self.lineBreakCount(
-                in: string,
-                range: NSRange(location: location, length: anchor.location - location)
-            )
+            anchor.number - count(NSRange(location: location, length: anchor.location - location))
         } else {
-            Self.lineBreakCount(in: string, range: NSRange(location: 0, length: location)) + 1
+            count(NSRange(location: 0, length: location)) + 1
         }
         anchor = (location, number)
         return number
+    }
+
+    private static func lineFragmentCount(in range: NSRange, of layoutManager: NSTextLayoutManager) -> Int {
+        guard range.length > 0, let contentManager = layoutManager.textContentManager else { return 0 }
+        let documentStart = contentManager.documentRange.location
+        guard let start = contentManager.location(documentStart, offsetBy: range.location) else { return 0 }
+        var count = 0
+        layoutManager.enumerateTextLayoutFragments(from: start, options: [.ensuresLayout]) { fragment in
+            guard contentManager.offset(from: documentStart, to: fragment.rangeInElement.location) < NSMaxRange(range)
+            else { return false }
+            count += fragment.textLineFragments.count
+            return true
+        }
+        return count
     }
 
     /// 空の文書にはレイアウトフラグメントがないので、カーソルの位置から求める
@@ -200,5 +257,40 @@ final class LineNumberView: NSView {
         context.translateBy(x: center, y: bounds.midY)
         context.rotate(by: .pi / 2)
         string.draw(at: CGPoint(x: -width / 2, y: font.capHeight / 2 - font.ascender), withAttributes: attributes)
+    }
+}
+
+final class LineNumberOptions: NSObject {
+    private let model: SettingsModel
+    let checkbox = NSButton(
+        checkboxWithTitle: String(localized: "settings.showsLineNumbers"),
+        target: nil,
+        action: nil
+    )
+    let unitButton = NSPopUpButton()
+
+    init(model: SettingsModel) {
+        self.model = model
+        super.init()
+        checkbox.target = self
+        checkbox.action = #selector(changeShowsLineNumbers(_:))
+        unitButton.addItems(for: EditorSettings.LineNumberUnit.self, title: \.title)
+        unitButton.target = self
+        unitButton.action = #selector(changeUnit(_:))
+        unitButton.setAccessibilityLabel(String(localized: "settings.lineNumberUnit"))
+    }
+
+    func update(with settings: EditorSettings) {
+        checkbox.state = settings.showsLineNumbers ? .on : .off
+        unitButton.selectItem(for: settings.lineNumberUnit)
+    }
+
+    @objc private func changeShowsLineNumbers(_ sender: NSButton) {
+        model.update { $0.showsLineNumbers = sender.state == .on }
+    }
+
+    @objc private func changeUnit(_ sender: NSPopUpButton) {
+        guard let unit = sender.selectedCase(of: EditorSettings.LineNumberUnit.self) else { return }
+        model.update { $0.lineNumberUnit = unit }
     }
 }

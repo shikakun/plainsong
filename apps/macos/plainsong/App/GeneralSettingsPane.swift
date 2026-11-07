@@ -37,11 +37,8 @@ final class GeneralSettingsPane: SettingsPane {
     )
     private let whitespaceScopeButton = NSPopUpButton()
     private var whitespaceScopeRow: NSGridRow?
-    private let lineNumbersCheckbox = NSButton(
-        checkboxWithTitle: String(localized: "settings.showsLineNumbers"),
-        target: nil,
-        action: nil
-    )
+    private let lineNumberOptions: LineNumberOptions
+    private var lineNumberUnitRow: NSGridRow?
     private let paragraphSpacingCheckbox = NSButton(
         checkboxWithTitle: String(localized: "settings.addsParagraphSpacing"),
         target: nil,
@@ -72,6 +69,7 @@ final class GeneralSettingsPane: SettingsPane {
         self.relaunch = relaunch
         orientationOptions = OrientationOptions(model: model)
         guideOptions = GuideOptions(model: model)
+        lineNumberOptions = LineNumberOptions(model: model)
         super.init(title: String(localized: "settings.general"))
         NotificationCenter.default.addObserver(
             self,
@@ -235,7 +233,7 @@ final class GeneralSettingsPane: SettingsPane {
         newlinesCheckbox.state = settings.showsNewlines ? .on : .off
         whitespaceCheckbox.state = settings.showsWhitespace ? .on : .off
         whitespaceScopeButton.selectItem(for: settings.whitespaceScope)
-        lineNumbersCheckbox.state = settings.showsLineNumbers ? .on : .off
+        lineNumberOptions.update(with: settings)
         paragraphSpacingCheckbox.state = settings.addsParagraphSpacing ? .on : .off
         paragraphSpacingButton.selectItem(for: settings.paragraphSpacing)
         paragraphIndentCheckbox.state = settings.indentsParagraphs ? .on : .off
@@ -243,6 +241,7 @@ final class GeneralSettingsPane: SettingsPane {
         fileAutosaveButton.selectItem(for: settings.fileAutosave)
         setRow(readableWidthRow, hidden: !settings.usesReadableWidth)
         setRow(whitespaceScopeRow, hidden: !settings.showsWhitespace)
+        setRow(lineNumberUnitRow, hidden: !settings.showsLineNumbers)
         setRow(paragraphSpacingRow, hidden: !settings.addsParagraphSpacing)
         setRow(paragraphIndentRow, hidden: !settings.indentsParagraphs)
         setRow(openBackupsRow, hidden: settings.fileAutosave != .backup)
@@ -374,9 +373,6 @@ extension GeneralSettingsPane {
         whitespaceScopeButton.action = #selector(changeWhitespaceScope(_:))
         whitespaceScopeButton.setAccessibilityLabel(String(localized: "settings.whitespaceScope"))
 
-        lineNumbersCheckbox.target = self
-        lineNumbersCheckbox.action = #selector(changeShowsLineNumbers(_:))
-
         paragraphSpacingCheckbox.target = self
         paragraphSpacingCheckbox.action = #selector(changeAddsParagraphSpacing(_:))
         paragraphSpacingButton.addItems(for: EditorSettings.ParagraphSpacing.self, title: \.title)
@@ -396,7 +392,8 @@ extension GeneralSettingsPane {
             [NSGridCell.emptyContentView, newlinesCheckbox],
             [NSGridCell.emptyContentView, whitespaceCheckbox],
             [NSGridCell.emptyContentView, whitespaceScopeButton],
-            [NSGridCell.emptyContentView, lineNumbersCheckbox],
+            [NSGridCell.emptyContentView, lineNumberOptions.checkbox],
+            [NSGridCell.emptyContentView, lineNumberOptions.unitButton],
             [NSGridCell.emptyContentView, paragraphSpacingCheckbox],
             [NSGridCell.emptyContentView, paragraphSpacingButton],
             [NSGridCell.emptyContentView, paragraphIndentCheckbox],
@@ -407,6 +404,7 @@ extension GeneralSettingsPane {
         ])
         optionsGrid.rowSpacing = 6
         whitespaceScopeRow = indent(whitespaceScopeButton, under: whitespaceCheckbox, in: optionsGrid)
+        lineNumberUnitRow = indent(lineNumberOptions.unitButton, under: lineNumberOptions.checkbox, in: optionsGrid)
         paragraphSpacingRow = indent(paragraphSpacingButton, under: paragraphSpacingCheckbox, in: optionsGrid)
         paragraphIndentRow = indent(paragraphIndentButton, under: paragraphIndentCheckbox, in: optionsGrid)
         readableWidthRow = indent(readableWidthButton, under: readableWidthCheckbox, in: optionsGrid)
@@ -445,10 +443,6 @@ extension GeneralSettingsPane {
 
     @objc private func changeShowsWhitespace(_ sender: NSButton) {
         model.update { $0.showsWhitespace = sender.state == .on }
-    }
-
-    @objc private func changeShowsLineNumbers(_ sender: NSButton) {
-        model.update { $0.showsLineNumbers = sender.state == .on }
     }
 
     @objc private func changeAddsParagraphSpacing(_ sender: NSButton) {

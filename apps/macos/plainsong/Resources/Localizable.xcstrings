@@ -1904,6 +1904,54 @@
         }
       }
     },
+    "settings.lineNumberUnit" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Number By"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "番号の単位"
+          }
+        }
+      }
+    },
+    "settings.lineNumberUnit.line" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Line"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "行"
+          }
+        }
+      }
+    },
+    "settings.lineNumberUnit.paragraph" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paragraph"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "段落"
+          }
+        }
+      }
+    },
     "settings.lineSpacing" : {
       "localizations" : {
         "en" : {
@@ -2357,13 +2405,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show Line Numbers"
+            "value" : "Show Numbers"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "行番号を表示"
+            "value" : "番号を表示"
           }
         }
       }

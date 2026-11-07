@@ -47,6 +47,7 @@ struct EditorSettings: Equatable {
     var showsWhitespace = false
     var whitespaceScope = WhitespaceScope.all
     var showsLineNumbers = false
+    var lineNumberUnit = LineNumberUnit.paragraph
     var addsParagraphSpacing = false
     var paragraphSpacing = ParagraphSpacing.halfLine
     var indentsParagraphs = false
@@ -114,6 +115,7 @@ struct EditorSettings: Equatable {
     private static let showsWhitespaceKey = "showsWhitespace"
     private static let whitespaceScopeKey = "whitespaceScope"
     private static let showsLineNumbersKey = "showsLineNumbers"
+    private static let lineNumberUnitKey = "lineNumberUnit"
     private static let addsParagraphSpacingKey = "addsParagraphSpacing"
     private static let paragraphSpacingKey = "paragraphSpacing"
     private static let indentsParagraphsKey = "indentsParagraphs"
@@ -152,6 +154,7 @@ struct EditorSettings: Equatable {
         settings.showsWhitespace = defaults.bool(forKey: showsWhitespaceKey)
         settings.whitespaceScope = defaults.value(forKey: whitespaceScopeKey, default: settings.whitespaceScope)
         settings.showsLineNumbers = defaults.bool(forKey: showsLineNumbersKey)
+        settings.lineNumberUnit = defaults.value(forKey: lineNumberUnitKey, default: settings.lineNumberUnit)
         settings.addsParagraphSpacing = defaults.bool(forKey: addsParagraphSpacingKey)
         settings.paragraphSpacing = defaults.value(forKey: paragraphSpacingKey, default: settings.paragraphSpacing)
         settings.indentsParagraphs = defaults.bool(forKey: indentsParagraphsKey)
@@ -199,6 +202,7 @@ struct EditorSettings: Equatable {
         defaults.set(showsWhitespace, forKey: Self.showsWhitespaceKey)
         defaults.set(whitespaceScope.rawValue, forKey: Self.whitespaceScopeKey)
         defaults.set(showsLineNumbers, forKey: Self.showsLineNumbersKey)
+        defaults.set(lineNumberUnit.rawValue, forKey: Self.lineNumberUnitKey)
         defaults.set(addsParagraphSpacing, forKey: Self.addsParagraphSpacingKey)
         defaults.set(paragraphSpacing.rawValue, forKey: Self.paragraphSpacingKey)
         defaults.set(indentsParagraphs, forKey: Self.indentsParagraphsKey)

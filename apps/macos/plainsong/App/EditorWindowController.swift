@@ -364,6 +364,7 @@ extension EditorWindowController {
             lineNumberView = nil
         }
         lineNumberView?.fontSize = settings.fontSize
+        lineNumberView?.unit = settings.lineNumberUnit
     }
 
     private func titlebarDidChange() {
