@@ -14,6 +14,23 @@ struct EditorSettingsTests {
         #expect(settings.crossInsetExpansion(trailing: insets.trailing, minimumTrailing: 40) == 64)
     }
 
+    /// 読みやすい幅はマス数の上限で、ウィンドウに入らないときはマスを減らす。余りは行末の余白にする
+    @Test
+    func decidesManuscriptCellsFromReadableWidthAndWindow() {
+        var settings = EditorSettings()
+        settings.showsManuscriptGuide = true
+        settings.fontSize = 16
+        #expect(settings.manuscriptCells(clipLength: 500, minimumLeading: 32, minimumTrailing: 32) == 27)
+        #expect(settings.lineInsets(clipLength: 500, minimumLeading: 32, minimumTrailing: 32) == (32, 36))
+
+        settings.usesReadableWidth = true
+        settings.readableWidth = .japaneseShort
+        #expect(settings.manuscriptCells(clipLength: 500, minimumLeading: 32, minimumTrailing: 32) == 20)
+        #expect(settings.lineInsets(clipLength: 500, minimumLeading: 32, minimumTrailing: 32) == (90, 90))
+        #expect(settings.manuscriptCells(clipLength: 200, minimumLeading: 32, minimumTrailing: 32) == 8)
+        #expect(settings.manuscriptCells(clipLength: 50, minimumLeading: 32, minimumTrailing: 32) == 1)
+    }
+
     @Test
     func keepsMinimumLeadingWhenCenteringDoesNotFit() {
         var settings = EditorSettings()

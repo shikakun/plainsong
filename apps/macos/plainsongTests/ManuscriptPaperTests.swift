@@ -87,6 +87,15 @@ struct ManuscriptPaperTests {
     }
 
     @Test
+    func breaksAtTheGivenCellsPerLine() {
+        let paper = ManuscriptPaper(cellsPerLine: 5)
+        let string = "あいうえお。かきくけこさ" as NSString
+        #expect(paper.lines(in: string).map(\.length) == [6, 5, 1])
+        #expect(paper.cells(ofLineAt: 0, in: string) == 6)
+        #expect(paper.cells(ofLineAt: 6, in: string) == 5)
+    }
+
+    @Test
     func roundsPartialPagesUp() {
         #expect(ManuscriptPaper.pages(forLines: 0) == 0)
         #expect(ManuscriptPaper.pages(forLines: 1) == 1)

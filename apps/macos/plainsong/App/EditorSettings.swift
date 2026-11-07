@@ -432,14 +432,33 @@ extension EditorSettings {
         minimumLeading: CGFloat,
         minimumTrailing: CGFloat
     ) -> (leading: CGFloat, trailing: CGFloat) {
-        guard usesReadableWidth || showsManuscriptGuide else { return (minimumLeading, minimumTrailing) }
-        let ems = showsManuscriptGuide ? CGFloat(ManuscriptPaper.cellsPerLine) : readableWidth.ems(in: orientation)
-        let maximumLength = fontSize * ems
+        if showsManuscriptGuide, !usesReadableWidth {
+            let cells = manuscriptCells(
+                clipLength: clipLength,
+                minimumLeading: minimumLeading,
+                minimumTrailing: minimumTrailing
+            )
+            return (minimumLeading, clipLength - minimumLeading - fontSize * CGFloat(cells))
+        }
+        guard usesReadableWidth else { return (minimumLeading, minimumTrailing) }
+        let maximumLength = showsManuscriptGuide
+            ? fontSize * CGFloat(manuscriptCells(
+                clipLength: clipLength,
+                minimumLeading: minimumLeading,
+                minimumTrailing: minimumTrailing
+            ))
+            : fontSize * readableWidth.ems(in: orientation)
         let centeringInset = ((clipLength - maximumLength) / 2).rounded(.down)
         if centeringInset >= max(minimumLeading, minimumTrailing) {
             return (centeringInset, centeringInset)
         }
         return (minimumLeading, max(minimumTrailing, (clipLength - maximumLength - minimumLeading).rounded(.down)))
+    }
+
+    /// 画面の原稿用紙の1行のマス数。読みやすい幅は上限で、ウィンドウに入らないときはマスを減らす。マスを欠けさせないので、余りは行末の余白にする
+    func manuscriptCells(clipLength: CGFloat, minimumLeading: CGFloat, minimumTrailing: CGFloat) -> Int {
+        let fitting = max(Int((clipLength - minimumLeading - minimumTrailing) / fontSize), 1)
+        return usesReadableWidth ? min(Int(readableWidth.ems(in: orientation)), fitting) : fitting
     }
 
     func crossInsetExpansion(trailing: CGFloat, minimumTrailing: CGFloat) -> CGFloat {

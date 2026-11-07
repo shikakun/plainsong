@@ -33,6 +33,8 @@ struct ManuscriptGuideTests {
         var settings = EditorSettings()
         settings.orientation = orientation
         settings.showsManuscriptGuide = true
+        settings.usesReadableWidth = true
+        settings.readableWidth = .japaneseShort
         configure(&settings)
         let editor = EditorWindowController(text: text, settings: settings)
         for _ in 0 ..< 10 {
@@ -152,15 +154,67 @@ struct ManuscriptGuideTests {
         }
     }
 
-    @Test
-    func keepsTheWindowLongEnoughForTheCells() async throws {
-        let editor = await makeEditor("あ", orientation: .horizontal) { $0.fontSize = 21 }
+    private func firstLineLength(of editor: EditorWindowController) -> Int? {
+        lines(of: editor).first?.line.characterRange.length
+    }
+
+    private func resize(
+        _ editor: EditorWindowController,
+        length: CGFloat,
+        orientation: EditorSettings.Orientation
+    ) async throws {
         let window = try #require(editor.window)
-        #expect(window.contentMinSize.width >= 21 * CGFloat(ManuscriptPaper.cellsPerLine))
-        window.setContentSize(NSSize(width: 200, height: 300))
+        window.setContentSize(orientation == .vertical
+            ? NSSize(width: 800, height: length)
+            : NSSize(width: length, height: 800))
+        for _ in 0 ..< 10 {
+            await Task.yield()
+        }
+    }
+
+    /// 読みやすい幅の字数はマス数の上限で、40字に入らないウィンドウではマスを減らす
+    @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical])
+    func followsReadableWidthUpToTheWindow(orientation: EditorSettings.Orientation) async throws {
+        let editor = await makeEditor(String(repeating: "あ", count: 200), orientation: orientation) {
+            $0.readableWidth = .japanese
+        }
+        try await resize(editor, length: 1000, orientation: orientation)
+        #expect(firstLineLength(of: editor) == 40)
+        #expect(gridView(of: editor)?.cellsPerLine == 40)
+
+        try await resize(editor, length: 400, orientation: orientation)
+        let cells = try #require(firstLineLength(of: editor))
+        #expect(cells < 40)
+        #expect(gridView(of: editor)?.cellsPerLine == cells)
+        let window = try #require(editor.window)
+        #expect((orientation == .vertical ? window.contentView?.frame.height : window.contentView?.frame.width) == 400)
+    }
+
+    /// 読みやすい幅がオフなら、ウィンドウの大きさに合わせて組み直す
+    @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical])
+    func fitsCellsToTheWindowWithoutReadableWidth(orientation: EditorSettings.Orientation) async throws {
+        let editor = await makeEditor(String(repeating: "あ", count: 200), orientation: orientation) {
+            $0.usesReadableWidth = false
+        }
+        try await resize(editor, length: 900, orientation: orientation)
+        let wide = try #require(firstLineLength(of: editor))
+        try await resize(editor, length: 500, orientation: orientation)
+        let narrow = try #require(firstLineLength(of: editor))
+        #expect(wide > narrow)
+        #expect(gridView(of: editor)?.cellsPerLine == narrow)
+        // 余りは行末の余白にして、マスを欠けさせない
+        let cell = EditorSettings().fontSize
+        let available = (orientation == .vertical ? editor.textView.visibleRect.width : editor.textView.bounds.width)
+        #expect(CGFloat(narrow) * cell <= available)
+    }
+
+    /// 画面のマス数を変えても、枚数と印刷は400字詰めで数える
+    @Test
+    func keepsStandardPaperForPageCount() {
         var settings = EditorSettings()
-        settings.fontSize = 21
-        editor.apply(settings)
-        #expect(window.contentMinSize.width <= 1)
+        settings.showsManuscriptGuide = true
+        settings.usesReadableWidth = true
+        settings.readableWidth = .japanese
+        #expect(settings.manuscriptPaper.cellsPerLine == ManuscriptPaper.standardCellsPerLine)
     }
 }

@@ -16,25 +16,6 @@ extension EditorWindowController {
         window.cascadeTopLeft(from: front.cascadeTopLeft(from: .zero))
     }
 
-    /// 原稿用紙のマスが見切れないよう、行の方向の長さを保つ。今のウィンドウが足りなければ、左上を保って広げる
-    func keepContentLength(_ length: CGFloat?, isVertical: Bool) {
-        guard let window else { return }
-        let minimum = length.map { isVertical ? NSSize(width: 1, height: $0) : NSSize(width: $0, height: 1) }
-            ?? NSSize(width: 1, height: 1)
-        guard window.contentMinSize != minimum else { return }
-        window.contentMinSize = minimum
-        guard !window.styleMask.contains(.fullScreen),
-              let content = window.contentView?.frame.size,
-              content.width < minimum.width || content.height < minimum.height
-        else { return }
-        var frame = window.frame
-        let height = max(minimum.height - content.height, 0)
-        frame.origin.y -= height
-        frame.size.height += height
-        frame.size.width += max(minimum.width - content.width, 0)
-        window.setFrame(frame, display: true)
-    }
-
     func windowDidEndLiveResize(_: Notification) {
         saveFrame()
     }

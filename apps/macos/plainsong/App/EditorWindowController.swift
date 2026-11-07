@@ -3,10 +3,10 @@ import AppKit
 final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private let editorWindow: NSWindow
     /// ステータスバーを本文に重ねるための入れ物。NSScrollViewは、サブビューにAuto Layoutの結果を反映しない
-    private let container = NSView()
+    let container = NSView()
     let scrollView = NSScrollView()
     let textView: NSTextView
-    private let layoutManager: LineHeightSegmentLayoutManager
+    let layoutManager: LineHeightSegmentLayoutManager
     /// レイアウトマネージャーはデリゲートを弱参照で持つので、ここで持っておく
     let whitespaceMarkers = WhitespaceMarkers()
     let markdownHighlighter: MarkdownHighlighter
@@ -20,8 +20,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private var toolbar: EditorToolbar?
     private var statusBar: StatusBar?
     private var lineNumberView: LineNumberView?
-    private var manuscriptGridView: ManuscriptGridView?
-    private var theme: Theme?
+    var manuscriptGridView: ManuscriptGridView?
+    var theme: Theme?
     /// 「デフォルト」とテーマにないキーは、NSTextViewが最初に持っている選択範囲の色に戻す
     private let standardSelectedTextAttributes: [NSAttributedString.Key: Any]
     var fileEncoding = FileEncoding.utf8 {
@@ -158,7 +158,10 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
             || settings.showsManuscriptGuide != previous?.showsManuscriptGuide
         if typesettingChanged {
             if let container = textView.textContainer as? ManuscriptTextContainer {
-                container.paper = settings.showsManuscriptGuide ? settings.manuscriptPaper : nil
+                // マス数はウィンドウの大きさで決まるので、`updateInsets()`で渡す
+                if !settings.showsManuscriptGuide {
+                    container.paper = nil
+                }
                 container.cellWidth = settings.fontSize
             }
             applyFont(of: settings)
@@ -360,24 +363,6 @@ extension EditorWindowController {
         lineNumberView?.fontSize = settings.fontSize
     }
 
-    private func applyManuscriptGrid(of settings: EditorSettings) {
-        guard settings.showsManuscriptGuide else {
-            manuscriptGridView?.removeFromSuperview()
-            manuscriptGridView = nil
-            return
-        }
-        let gridView = manuscriptGridView ?? ManuscriptGridView(textView: textView)
-        if manuscriptGridView == nil {
-            gridView.frame = container.bounds
-            gridView.autoresizingMask = [.width, .height]
-            container.addSubview(gridView, positioned: .above, relativeTo: scrollView)
-            manuscriptGridView = gridView
-        }
-        gridView.color = theme?.foreground ?? .labelColor
-        gridView.cellSize = settings.fontSize
-        gridView.linePitch = Self.lineHeight(of: settings) * settings.lineSpacing.multiplier
-    }
-
     private func titlebarDidChange() {
         guard measureTitlebar() else { return }
         updateInsets()
@@ -427,12 +412,13 @@ extension EditorWindowController {
             settings.showsLineNumbers ? gutter : settings.minimumInset
         }
         let minimumTrailing = isVertical ? bottomInset : settings.minimumInset
-        keepContentLength(
-            settings.showsManuscriptGuide
-                ? minimumLeading + minimumTrailing + fontSize * CGFloat(ManuscriptPaper.cellsPerLine)
-                : nil,
-            isVertical: isVertical
-        )
+        if settings.showsManuscriptGuide {
+            applyManuscriptCells(settings.manuscriptCells(
+                clipLength: clipLength,
+                minimumLeading: minimumLeading,
+                minimumTrailing: minimumTrailing
+            ), of: settings)
+        }
         let (leading, trailing) = settings.lineInsets(
             clipLength: clipLength,
             minimumLeading: minimumLeading,

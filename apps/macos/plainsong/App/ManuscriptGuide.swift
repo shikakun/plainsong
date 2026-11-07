@@ -45,6 +45,10 @@ final class ManuscriptGridView: NSView {
         didSet { needsDisplay = true }
     }
 
+    var cellsPerLine = ManuscriptPaper.standardCellsPerLine {
+        didSet { needsDisplay = true }
+    }
+
     var color = NSColor.labelColor {
         didSet { needsDisplay = true }
     }
@@ -123,14 +127,14 @@ final class ManuscriptGridView: NSView {
         }
         let path = NSBezierPath()
         let start = textView.textContainerOrigin.x
-        let end = start + CGFloat(ManuscriptPaper.cellsPerLine) * cellSize
+        let end = start + CGFloat(cellsPerLine) * cellSize
         for line in firstLine ... lastLine {
             let middle = first + CGFloat(line) * linePitch
             for edge in [middle - half, middle + half] {
                 path.move(to: snapped(start, edge))
                 path.line(to: snapped(end, edge))
             }
-            for cell in 0 ... ManuscriptPaper.cellsPerLine {
+            for cell in 0 ... cellsPerLine {
                 let position = start + CGFloat(cell) * cellSize
                 path.move(to: snapped(position, middle - half))
                 path.line(to: snapped(position, middle + half))
@@ -143,6 +147,41 @@ final class ManuscriptGridView: NSView {
 
     private var lineColor: NSColor {
         color.withAlphaComponent(NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast ? 0.55 : 0.18)
+    }
+}
+
+extension EditorWindowController {
+    func applyManuscriptGrid(of settings: EditorSettings) {
+        guard settings.showsManuscriptGuide else {
+            manuscriptGridView?.removeFromSuperview()
+            manuscriptGridView = nil
+            return
+        }
+        let gridView = manuscriptGridView ?? ManuscriptGridView(textView: textView)
+        if manuscriptGridView == nil {
+            gridView.frame = container.bounds
+            gridView.autoresizingMask = [.width, .height]
+            container.addSubview(gridView, positioned: .above, relativeTo: scrollView)
+            manuscriptGridView = gridView
+        }
+        gridView.color = theme?.foreground ?? .labelColor
+        gridView.cellSize = settings.fontSize
+        gridView.linePitch = Self.lineHeight(of: settings) * settings.lineSpacing.multiplier
+    }
+
+    /// ウィンドウの大きさを変えているあいだは何度も呼ばれるので、変わったときだけ組み直す
+    func applyManuscriptCells(_ cells: Int, of settings: EditorSettings) {
+        manuscriptGridView?.cellsPerLine = cells
+        guard let container = textView.textContainer as? ManuscriptTextContainer else { return }
+        var paper = settings.manuscriptPaper
+        paper.cellsPerLine = cells
+        guard paper != container.paper else { return }
+        container.paper = paper
+        if let documentRange = layoutManager.textContentManager?.documentRange {
+            layoutManager.invalidateLayout(for: documentRange)
+        }
+        layoutManager.textViewportLayoutController.layoutViewport()
+        redrawText()
     }
 }
 

@@ -1,6 +1,6 @@
 import Foundation
 
-/// 400字詰めの原稿用紙に組んだときの行を求める。字下げ以外の設定やフォントには左右されない
+/// 原稿用紙に組んだときの行を求める。枚数と印刷は400字詰めで数え、画面だけ1行のマス数を変えられる。フォントには左右されない
 nonisolated struct ManuscriptPaper: Equatable {
     struct Line: Equatable {
         /// 改行も含めた、UTF-16での長さ
@@ -24,7 +24,7 @@ nonisolated struct ManuscriptPaper: Equatable {
         }
     }
 
-    static let cellsPerLine = 20
+    static let standardCellsPerLine = 20
     static let linesPerPage = 20
     private static let cellsPerTab = Int(EditorSettings.tabEms)
 
@@ -37,6 +37,7 @@ nonisolated struct ManuscriptPaper: Equatable {
 
     /// 段落の字下げのマスの数
     var indent = 0
+    var cellsPerLine = Self.standardCellsPerLine
 
     static func pages(forLines lines: Int) -> Int {
         (lines + linesPerPage - 1) / linesPerPage
@@ -73,7 +74,7 @@ nonisolated struct ManuscriptPaper: Equatable {
             var cells = indent(ofContents: contents, in: string)
             var location = contents.location
             while start < units.count {
-                let end = Self.lineEnd(from: start, cells: cells, in: units)
+                let end = lineEnd(from: start, cells: cells, in: units)
                 var line: [Placement] = []
                 for unit in units[start ..< end] {
                     if !unit.isTab {
@@ -116,17 +117,17 @@ nonisolated struct ManuscriptPaper: Equatable {
     /// `location`から始まる行が使うマスの数を返す。TextKitが行を組むたびに呼ぶので、行が決まるだけの文字しか読まない
     func cells(ofLineAt location: Int, in string: NSString) -> Int {
         guard location < string.length else { return 0 }
-        var length = Self.cellsPerLine * 3
+        var length = cellsPerLine * 3
         while true {
             let end = min(location + length, string.length)
             let contentsEnd = (location ..< end).first { Self.isLineBreak(string.character(at: $0)) } ?? end
             let contents = NSRange(location: location, length: contentsEnd - location)
             let units = Self.units(of: contents, in: string)
             // 次の字とその次の字まで見れば、行の終わりが決まる
-            if contentsEnd < end || end == string.length || units.count > Self.cellsPerLine + 2 {
+            if contentsEnd < end || end == string.length || units.count > cellsPerLine + 2 {
                 guard !units.isEmpty else { return 0 }
                 let startCells = isParagraphStart(location, in: string) ? indent(ofContents: contents, in: string) : 0
-                let lineEnd = Self.lineEnd(from: 0, cells: startCells, in: units)
+                let lineEnd = lineEnd(from: 0, cells: startCells, in: units)
                 return Self.cells(of: 0 ..< lineEnd, from: startCells, in: units)
             }
             length *= 2
@@ -198,7 +199,7 @@ nonisolated struct ManuscriptPaper: Equatable {
         var start = 0
         var startCells = indent
         while start < units.count {
-            let end = Self.lineEnd(from: start, cells: startCells, in: units)
+            let end = lineEnd(from: start, cells: startCells, in: units)
             let length = units[start ..< end].reduce(end == units.count ? terminatorLength : 0) { $0 + $1.length }
             lines.append(Line(length: length, cells: Self.cells(of: start ..< end, from: startCells, in: units)))
             start = end
@@ -206,22 +207,22 @@ nonisolated struct ManuscriptPaper: Equatable {
         }
     }
 
-    private static func lineEnd(from start: Int, cells startCells: Int, in units: [Unit]) -> Int {
+    private func lineEnd(from start: Int, cells startCells: Int, in units: [Unit]) -> Int {
         var end = start
         var cells = startCells
         while end < units.count {
-            let width = width(of: units[end], at: cells)
+            let width = Self.width(of: units[end], at: cells)
             guard cells + width <= cellsPerLine else { break }
             cells += width
             end += 1
         }
         end = max(end, start + 1)
         guard end < units.count else { return end }
-        if canHang(at: end, in: units) {
+        if Self.canHang(at: end, in: units) {
             return end + 1
         }
         var candidate = end
-        while candidate > start, !canBreak(before: candidate, in: units) {
+        while candidate > start, !Self.canBreak(before: candidate, in: units) {
             candidate -= 1
         }
         // 禁則の文字だけが続いて送る先がないときは、マスいっぱいで折り返す

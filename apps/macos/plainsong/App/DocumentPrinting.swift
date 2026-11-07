@@ -19,7 +19,7 @@ private struct ManuscriptPageGeometry {
     init(lineLength: CGFloat, crossLength: CGFloat) {
         let columns = CGFloat(Self.columns)
         // ぶら下げる句読点の分を、行の方向に1マス空ける
-        let cellsPerLine = CGFloat(ManuscriptPaper.cellsPerLine + 1)
+        let cellsPerLine = CGFloat(ManuscriptPaper.standardCellsPerLine + 1)
         cell = Self.snapped(min(lineLength / cellsPerLine, crossLength / (columns * Self.pitchRatio)))
         pitch = Self.snapped(cell * Self.pitchRatio)
         lineStart = Self.snapped((lineLength - cellsPerLine * cell) / 2)
@@ -43,10 +43,10 @@ private struct ManuscriptPageGeometry {
             context.addRect(CGRect(
                 x: lineStart,
                 y: middle - half,
-                width: CGFloat(ManuscriptPaper.cellsPerLine) * cell,
+                width: CGFloat(ManuscriptPaper.standardCellsPerLine) * cell,
                 height: cell
             ))
-            for index in 1 ..< ManuscriptPaper.cellsPerLine {
+            for index in 1 ..< ManuscriptPaper.standardCellsPerLine {
                 let position = lineStart + CGFloat(index) * cell
                 context.move(to: CGPoint(x: position, y: middle - half))
                 context.addLine(to: CGPoint(x: position, y: middle + half))
