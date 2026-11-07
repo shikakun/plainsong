@@ -194,10 +194,9 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         let lineHeight = Self.lineHeight(of: settings)
         let paragraphStyle = settings.paragraphStyle(lineHeight: lineHeight)
         layoutManager.lineHeight = lineHeight
-        let japanese = CTFontCreateForString(bodyFont, "あ" as CFString, CFRange(location: 0, length: 1)) as NSFont
+        let japanese = EditorSettings.japaneseFont(for: bodyFont)
         layoutManager.japaneseMiddle = (japanese.ascender + japanese.descender) / 2
-        // 字送りを揃えるために和文のフォントへ差し替えると、その文字を含む行だけ高さの基準が変わり、マスからずれる
-        let font = settings.showsManuscriptGuide ? japanese : bodyFont
+        let font = settings.bodyFont
 
         // defaultParagraphStyleは、変換を通さずに入力した文字には付かないので、入力する文字の属性に指定する
         textView.typingAttributes[.font] = font
@@ -245,7 +244,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         typesetter.update(
             usesKerning: settings.usesKerning && !settings.showsManuscriptGuide,
             isVertical: settings.orientation == .vertical,
-            isManuscript: settings.showsManuscriptGuide
+            manuscriptFont: settings.showsManuscriptGuide ? settings.bodyFont : nil
         )
     }
 
@@ -424,7 +423,11 @@ extension EditorWindowController {
             minimumLeading: minimumLeading,
             minimumTrailing: minimumTrailing
         )
-        let expansion = settings.crossInsetExpansion(trailing: trailing, minimumTrailing: minimumTrailing)
+        let expansion = settings.crossInsetExpansion(
+            clipLength: clipLength,
+            minimumLeading: minimumLeading,
+            minimumTrailing: minimumTrailing
+        )
         lineNumberView?.frame = isVertical
             ? NSRect(x: 0, y: container.bounds.height - leading, width: container.bounds.width, height: gutter)
             : NSRect(x: leading - gutter, y: 0, width: gutter, height: container.bounds.height)

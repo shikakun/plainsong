@@ -21,6 +21,10 @@ nonisolated struct ManuscriptPaper: Equatable {
         var isTab: Bool {
             scalar == "\t"
         }
+
+        var isZeroWidth: Bool {
+            scalar.map(UprightGlyphs.isZeroWidth) ?? false
+        }
     }
 
     static let standardCellsPerLine = 20
@@ -28,9 +32,9 @@ nonisolated struct ManuscriptPaper: Equatable {
     private static let cellsPerTab = Int(EditorSettings.tabEms)
 
     private static let hanging = Set("、。".unicodeScalars)
-    /// stone_engineのSTKinsoku（MIT License, Copyright 2024 Nihon Design Center）に、全角の！とゝゞを足したもの
+    /// stone_engineのSTKinsoku（MIT License, Copyright 2024 Nihon Design Center）に、全角の！，．：；とゝゞを足したもの
     private static let notStarting = Set(
-        " ,.?:;!)）]］｝、〕〉》」』】〙〗〟’”｠»ヽヾゝゞァィゥェォッャュョヮヵヶぁぃぅぇぉっゃゅょゎゕゖㇰㇱㇲㇳㇴㇵㇶㇷㇸㇹㇺㇻㇼㇽㇾㇿ々〻？！‼⁇⁈⁉。.™".unicodeScalars
+        " ,.?:;!)）]］｝、〕〉》」』】〙〗〟’”｠»ヽヾゝゞァィゥェォッャュョヮヵヶぁぃぅぇぉっゃゅょゎゕゖㇰㇱㇲㇳㇴㇵㇶㇷㇸㇹㇺㇻㇼㇽㇾㇿ々〻？！，．：；‼⁇⁈⁉。.™".unicodeScalars
     )
     private static let notEnding = Set("(（[［｛〔〈《「『【〘〖〝‘“｟«\"'".unicodeScalars)
 
@@ -105,7 +109,8 @@ nonisolated struct ManuscriptPaper: Equatable {
                 for: NSRange(location: location, length: 0)
             )
             lineEnd = min(lineEnd, rangeEnd)
-            contentsEnd = min(contentsEnd, rangeEnd)
+            // 範囲が\r\nの\nから始まると、行の内容の終わりは範囲の手前にある
+            contentsEnd = max(min(contentsEnd, rangeEnd), location)
             body(NSRange(location: location, length: contentsEnd - location), lineEnd - contentsEnd)
             location = lineEnd
         }
@@ -153,15 +158,12 @@ nonisolated struct ManuscriptPaper: Equatable {
     }
 
     /// 縦中横の2桁は、組方向によらず1マスに入れる
-    /// 行は語の途中からも始まるので、語の先頭から調べる。2026の後半を2桁とみなさないため
+    /// 行は語の途中からも始まる。2026の後半の26は2桁ではない
     private static func units(of contents: NSRange, in string: NSString) -> [Unit] {
-        var tokenStart = contents.location
-        while tokenStart > 0, UprightGlyphs.isHalfWidthGraphic(string.character(at: tokenStart - 1)) {
-            tokenStart -= 1
-        }
-        let searched = NSRange(location: tokenStart, length: NSMaxRange(contents) - tokenStart)
-        var tateChuYoko = UprightGlyphs.runs(in: string, range: searched)
-            .filter { $0.kind == .tateChuYoko && $0.range.location >= contents.location }
+        let startsInsideToken = contents.location > 0
+            && UprightGlyphs.isHalfWidthGraphic(string.character(at: contents.location - 1))
+        var tateChuYoko = UprightGlyphs.runs(in: string, range: contents)
+            .filter { $0.kind == .tateChuYoko && !(startsInsideToken && $0.range.location == contents.location) }
             .map(\.range)[...]
         var units: [Unit] = []
         units.reserveCapacity(contents.length)
@@ -230,7 +232,10 @@ nonisolated struct ManuscriptPaper: Equatable {
     }
 
     private static func width(of unit: Unit, at cells: Int) -> Int {
-        unit.isTab ? cellsPerTab - cells % cellsPerTab : 1
+        if unit.isTab {
+            return cellsPerTab - cells % cellsPerTab
+        }
+        return unit.isZeroWidth ? 0 : 1
     }
 
     /// 次の字も行頭に置けないときにぶら下げると、その字の行き場がなくなる

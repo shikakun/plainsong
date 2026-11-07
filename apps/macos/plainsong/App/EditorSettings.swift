@@ -72,6 +72,16 @@ struct EditorSettings: Equatable {
         statusBarItems.filter(\.isEnabled).map(\.kind)
     }
 
+    /// 原稿用紙で字送りを揃えるために和文のフォントへ差し替えると、その文字を含む行だけ高さの基準が変わり、マスからずれるので、本文全体を和文のフォントにする
+    var bodyFont: NSFont {
+        let font = fontFamily.font(ofSize: fontSize)
+        return showsManuscriptGuide ? EditorSettings.japaneseFont(for: font) : font
+    }
+
+    static func japaneseFont(for font: NSFont) -> NSFont {
+        CTFontCreateForString(font, "あ" as CFString, CFRange(location: 0, length: 1)) as NSFont
+    }
+
     var manuscriptPaper: ManuscriptPaper {
         ManuscriptPaper(indent: indentsParagraphs ? Int(paragraphIndent.ems) : 0)
     }
@@ -460,8 +470,22 @@ extension EditorSettings {
         return usesReadableWidth ? min(Int(readableWidth.ems(in: orientation)), fitting) : fitting
     }
 
-    func crossInsetExpansion(trailing: CGFloat, minimumTrailing: CGFloat) -> CGFloat {
-        min((trailing - minimumTrailing) / 2, fontSize * 4).rounded(.down)
+    /// 原稿用紙のマス数がウィンドウで決まるあいだ、行末の余白はマスに満たない端数で増減する。広げると、幅を変えるたびに本文とマス目が揺れる
+    func crossInsetExpansion(clipLength: CGFloat, minimumLeading: CGFloat, minimumTrailing: CGFloat) -> CGFloat {
+        if showsManuscriptGuide {
+            let cells = manuscriptCells(
+                clipLength: clipLength,
+                minimumLeading: minimumLeading,
+                minimumTrailing: minimumTrailing
+            )
+            guard usesReadableWidth, cells >= Int(readableWidth.ems(in: orientation)) else { return 0 }
+        }
+        let trailing = lineInsets(
+            clipLength: clipLength,
+            minimumLeading: minimumLeading,
+            minimumTrailing: minimumTrailing
+        ).trailing
+        return min((trailing - minimumTrailing) / 2, fontSize * 4).rounded(.down)
     }
 }
 

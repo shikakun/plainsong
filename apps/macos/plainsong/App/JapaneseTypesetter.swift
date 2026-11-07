@@ -4,8 +4,10 @@ final class JapaneseTypesetter {
     private weak var textView: NSTextView?
     private var usesKerning = false
     private var isVertical = false
-    private var isManuscript = false
+    private var manuscriptFont: NSFont?
+    private var fixesCellAdvance = true
     private var replacements: [UprightGlyphs.Kind: [NSFont: NSFont]] = [:]
+    private var cellFonts: [NSFont: [Character: NSFont]] = [:]
 
     init(textView: NSTextView) {
         self.textView = textView
@@ -16,11 +18,14 @@ final class JapaneseTypesetter {
         usesKerning ? nil : 0
     }
 
-    func update(usesKerning: Bool, isVertical: Bool, isManuscript: Bool = false) {
+    /// 印刷の原稿用紙は1字ずつマスの中心に置くので、1字分に収まる字の字送りを固定しない。固定すると、幅の狭い字が中心から左に寄る
+    func update(usesKerning: Bool, isVertical: Bool, manuscriptFont: NSFont? = nil, fixesCellAdvance: Bool = true) {
         self.usesKerning = usesKerning
         self.isVertical = isVertical
-        self.isManuscript = isManuscript
+        self.manuscriptFont = manuscriptFont
+        self.fixesCellAdvance = fixesCellAdvance
         replacements.removeAll()
+        cellFonts.removeAll()
         textView?.typingAttributes[.kern] = baseKern
         guard let storage = textView?.textStorage else { return }
         typeset(NSRange(location: 0, length: storage.length))
@@ -83,9 +88,14 @@ final class JapaneseTypesetter {
     }
 
     private func runs(in settled: IndexSet, of string: NSString, storage: NSTextStorage) -> [UprightGlyphs.Run] {
-        if isManuscript {
+        if let manuscriptFont {
             return settled.rangeView.flatMap {
-                UprightGlyphs.manuscriptRuns(in: string, range: NSRange($0), isVertical: isVertical)
+                UprightGlyphs.manuscriptRuns(
+                    in: string,
+                    range: NSRange($0),
+                    isVertical: isVertical,
+                    font: manuscriptFont
+                )
             }
         }
         guard isVertical else { return [] }
@@ -118,12 +128,33 @@ final class JapaneseTypesetter {
         let original = UprightGlyphs.isReplacement(font)
             ? storage.attribute(.uprightOriginalFont, at: run.range.location, effectiveRange: nil) as? NSFont ?? font
             : font
-        let replacement = replacements[run.kind]?[original] ?? UprightGlyphs.font(for: run.kind, replacing: original)
-        replacements[run.kind, default: [:]][original] = replacement
-        write(.font, replacement, in: run.range, of: storage)
+        if manuscriptFont != nil, run.kind == .upright || run.kind == .emoji {
+            UprightGlyphs.forEachCharacter(in: run.range, of: storage.mutableString) { character, range in
+                write(.font, cellFont(for: character, kind: run.kind, replacing: original), in: range, of: storage)
+            }
+        } else {
+            let replacement = replacements[run.kind]?[original]
+                ?? UprightGlyphs.font(for: run.kind, replacing: original)
+            replacements[run.kind, default: [:]][original] = replacement
+            write(.font, replacement, in: run.range, of: storage)
+        }
         write(.uprightGlyphs, run.kind.rawValue as NSNumber, in: run.range, of: storage)
         write(.uprightOriginalFont, original, in: run.range, of: storage)
         write(.verticalGlyphForm, run.kind == .upright && isVertical ? 1 as NSNumber : nil, in: run.range, of: storage)
+    }
+
+    private func cellFont(for character: Character, kind: UprightGlyphs.Kind, replacing original: NSFont) -> NSFont {
+        if let font = cellFonts[original]?[character] {
+            return font
+        }
+        let font = UprightGlyphs.cellFont(
+            for: character,
+            kind: kind,
+            replacing: original,
+            fixesAdvance: fixesCellAdvance
+        )
+        cellFonts[original, default: [:]][character] = font
+        return font
     }
 
     /// 同じ値でも書き込むとTextKitが段落を組み直すので、変わるところだけ書き込む

@@ -29,6 +29,7 @@ struct ManuscriptPaperTests {
         #expect(lengths(filler(20) + "ゃいう") == [19, 4])
         #expect(lengths(filler(20) + "！いう") == [19, 4])
         #expect(lengths(filler(20) + "ゝいう") == [19, 4])
+        #expect(lengths(filler(20) + "，いう") == [19, 4])
         // STKinsokuにない長音は行頭に置ける
         #expect(lengths(filler(20) + "ーいう") == [20, 3])
     }
@@ -42,6 +43,11 @@ struct ManuscriptPaperTests {
     @Test
     func countsCellsByGraphemeCluster() {
         #expect(lengths(String(repeating: "か\u{309A}", count: 21)) == [40, 2])
+    }
+
+    @Test
+    func doesNotGiveACellToZeroWidthCharacters() {
+        #expect(lengths(filler(10) + "\u{200B}" + filler(10) + "いう") == [21, 2])
     }
 
     /// 2026は縦中横にしないので、4マス使う
@@ -72,6 +78,12 @@ struct ManuscriptPaperTests {
         ] {
             #expect(paper.count(in: text as NSString) == lines, "\(text.debugDescription)")
         }
+    }
+
+    @Test
+    func countsARangeThatStartsInsideALineTerminator() {
+        let lines = ManuscriptPaper().lines(in: "あ\r\nい" as NSString, range: NSRange(location: 2, length: 2))
+        #expect(lines.map(\.cells) == [0, 1])
     }
 
     /// 字下げとタブのマスを飛ばし、2桁の数字は1マスに入れる。タブは次の偶数のマスまで進む

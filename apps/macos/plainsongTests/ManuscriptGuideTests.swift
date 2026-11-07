@@ -18,12 +18,15 @@ struct ManuscriptGuideTests {
         "",
         "# 見出し **強調** `コード`",
         "「" + String(repeating: "あ", count: 30),
+        String(repeating: "😀", count: 5) + String(repeating: "あ", count: 15) + "いう",
+        String(repeating: "あ", count: 18) + "👨‍👩‍👧1️⃣いう",
+        "éあ☺あ한あe\u{0301}あx\u{0301}あ" + String(repeating: "あ", count: 10) + "いう",
+        // 行のベースラインは行頭の字のフォントで決まる
+        "한あ",
+        String(repeating: "ｶﾞ", count: 19) + "12ﾊﾟいう",
+        "かﾞ" + String(repeating: "あ", count: 19) + "いう",
+        String(repeating: "あ", count: 10) + "\u{200B}" + String(repeating: "あ", count: 10) + "いう",
     ].joined(separator: "\n")
-
-    /// 絵文字は1字分よりわずかに広いので、行の字数だけを確かめる
-    private static let textWithEmoji = text + "\n"
-        + String(repeating: "😀", count: 4) + String(repeating: "あ", count: 16) + "いう\n"
-        + String(repeating: "あ", count: 18) + "👨‍👩‍👧1️⃣いう"
 
     private func makeEditor(
         _ text: String = text,
@@ -37,10 +40,14 @@ struct ManuscriptGuideTests {
         settings.readableWidth = .japaneseShort
         configure(&settings)
         let editor = EditorWindowController(text: text, settings: settings)
+        await waitForTypesetting()
+        return editor
+    }
+
+    private func waitForTypesetting() async {
         for _ in 0 ..< 10 {
             await Task.yield()
         }
-        return editor
     }
 
     private func lines(of editor: EditorWindowController) -> [(line: NSTextLineFragment, origin: CGPoint)] {
@@ -59,12 +66,12 @@ struct ManuscriptGuideTests {
 
     @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical], [false, true])
     func breaksLinesWhereThePaperSays(orientation: EditorSettings.Orientation, indents: Bool) async {
-        let editor = await makeEditor(Self.textWithEmoji, orientation: orientation) {
+        let editor = await makeEditor(orientation: orientation) {
             $0.indentsParagraphs = indents
         }
         let paper = ManuscriptPaper(indent: indents ? 1 : 0)
         #expect(lines(of: editor).map(\.line.characterRange.length)
-            == paper.lines(in: Self.textWithEmoji as NSString).map(\.length))
+            == paper.lines(in: Self.text as NSString).map(\.length))
     }
 
     @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical], EditorSettings.FontFamily.allCases)
@@ -72,22 +79,26 @@ struct ManuscriptGuideTests {
         orientation: EditorSettings.Orientation,
         fontFamily: EditorSettings.FontFamily
     ) async {
-        let editor = await makeEditor(orientation: orientation) { $0.fontFamily = fontFamily }
-        let cell = EditorSettings().fontSize
-        for (line, origin) in lines(of: editor) {
-            let characters = line.attributedString.attributedSubstring(from: line.characterRange).string
-            var offset = line.characterRange.location
-            var previous: Character?
-            for character in characters {
-                defer {
-                    offset += character.utf16.count
-                    previous = character
+        for fontSize in EditorSettings.fontSizes {
+            let editor = await makeEditor(orientation: orientation) {
+                $0.fontFamily = fontFamily
+                $0.fontSize = fontSize
+            }
+            for (line, origin) in lines(of: editor) {
+                let characters = line.attributedString.attributedSubstring(from: line.characterRange).string
+                var offset = line.characterRange.location
+                var previous: Character?
+                for character in characters {
+                    defer {
+                        offset += character.utf16.count
+                        previous = character
+                    }
+                    // 2桁の数字の2字目は、1字目と同じマスに入る
+                    guard !(character.isNumber && previous?.isNumber == true) else { continue }
+                    let position = origin.x + line.typographicBounds.minX + line.locationForCharacter(at: offset).x
+                    let remainder = position.truncatingRemainder(dividingBy: fontSize)
+                    #expect(min(remainder, fontSize - remainder) < 0.01, "\(character) in \(characters)")
                 }
-                // 2桁の数字の2字目は、1字目と同じマスに入る
-                guard !(character.isNumber && previous?.isNumber == true) else { continue }
-                let position = origin.x + line.typographicBounds.minX + line.locationForCharacter(at: offset).x
-                let remainder = position.truncatingRemainder(dividingBy: cell)
-                #expect(min(remainder, cell - remainder) < 0.01, "\(character) in \(characters)")
             }
         }
     }
@@ -98,26 +109,28 @@ struct ManuscriptGuideTests {
         orientation: EditorSettings.Orientation,
         fontFamily: EditorSettings.FontFamily
     ) async throws {
-        let editor = await makeEditor("\n" + Self.text + "\n\n\n" + Self.text, orientation: orientation) {
-            $0.fontFamily = fontFamily
-        }
-        let grid = try #require(gridView(of: editor))
-        let layoutManager = try #require(editor.textView.textLayoutManager)
-        let contentManager = try #require(layoutManager.textContentManager)
-        var offset = 0
-        for (index, entry) in lines(of: editor).enumerated() {
-            defer { offset += entry.line.characterRange.length }
-            let start = contentManager.documentRange.location
-            let location = try #require(contentManager.location(start, offsetBy: offset))
-            let range = try #require(NSTextRange(location: location, end: location))
-            var middle: CGFloat?
-            layoutManager.enumerateTextSegments(in: range, type: .standard) { _, frame, _, _ in
-                middle = frame.midY
-                return false
+        for fontSize in EditorSettings.fontSizes {
+            let editor = await makeEditor("\n" + Self.text + "\n\n\n" + Self.text, orientation: orientation) {
+                $0.fontFamily = fontFamily
+                $0.fontSize = fontSize
             }
-            let actual = try #require(middle) + editor.textView.textContainerOrigin.y
-            let expected = try #require(grid.middle(ofLine: index))
-            #expect(abs(actual - expected) < 0.5, "line \(index)")
+            let grid = try #require(gridView(of: editor))
+            let layoutManager = editor.layoutManager
+            let isVertical = orientation == .vertical
+            for (index, entry) in lines(of: editor).enumerated() {
+                let characters = entry.line.attributedString.attributedSubstring(from: entry.line.characterRange).string
+                let middle = layoutManager.verticalMiddle(
+                    of: entry.line,
+                    in: entry.line.typographicBounds,
+                    isEmpty: characters.allSatisfy(\.isNewline)
+                ) - (isVertical ? 0 : layoutManager.japaneseMiddle)
+                let actual = entry.origin.y + middle + editor.textView.textContainerOrigin.y
+                let expected = try #require(grid.middle(ofLine: index))
+                // 行送りが半端な値のとき、TextKitは行の位置を整数に丸める。行頭の絵文字は小さいフォントなので、さらに動く
+                let startsWithEmoji = characters.unicodeScalars.first?.properties.isEmojiPresentation == true
+                let tolerance: CGFloat = startsWithEmoji ? 2 : 1
+                #expect(abs(actual - expected) <= tolerance, "\(fontSize)pt line \(index): \(characters)")
+            }
         }
     }
 
@@ -127,17 +140,31 @@ struct ManuscriptGuideTests {
         var settings = EditorSettings()
         settings.orientation = .vertical
         editor.apply(settings)
-        for _ in 0 ..< 10 {
-            await Task.yield()
-        }
+        await waitForTypesetting()
         #expect(gridView(of: editor) == nil)
         let storage = try #require(editor.textStorage)
         let style = storage.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle
         #expect(style?.lineBreakMode == .byWordWrapping)
-        let location = storage.mutableString.range(of: "2026").location
-        #expect(storage.attribute(.uprightGlyphs, at: location, effectiveRange: nil) == nil)
-        let font = storage.attribute(.font, at: location, effectiveRange: nil) as? NSFont
-        #expect(font == settings.fontFamily.font(ofSize: settings.fontSize))
+        let body = settings.fontFamily.font(ofSize: settings.fontSize)
+        for replaced in ["2026", "😀", "ｶﾞ"] {
+            let location = storage.mutableString.range(of: replaced).location
+            #expect(storage.attribute(.uprightGlyphs, at: location, effectiveRange: nil) == nil, "\(replaced)")
+            #expect(storage.attribute(.font, at: location, effectiveRange: nil) as? NSFont == body, "\(replaced)")
+        }
+    }
+
+    @Test
+    func usesTheBodyFontForMarkdownWhenTurnedOn() async throws {
+        var settings = EditorSettings()
+        settings.highlightsMarkdown = true
+        let editor = EditorWindowController(text: "**強調**と本文", settings: settings)
+        await waitForTypesetting()
+        settings.showsManuscriptGuide = true
+        editor.apply(settings)
+        await waitForTypesetting()
+        let storage = try #require(editor.textStorage)
+        let location = storage.mutableString.range(of: "強").location
+        #expect(storage.attribute(.font, at: location, effectiveRange: nil) as? NSFont == settings.bodyFont)
     }
 
     private func firstLineLength(of editor: EditorWindowController) -> Int? {
@@ -153,9 +180,7 @@ struct ManuscriptGuideTests {
         window.setContentSize(orientation == .vertical
             ? NSSize(width: 800, height: length)
             : NSSize(width: length, height: 800))
-        for _ in 0 ..< 10 {
-            await Task.yield()
-        }
+        await waitForTypesetting()
     }
 
     @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical], [false, true])

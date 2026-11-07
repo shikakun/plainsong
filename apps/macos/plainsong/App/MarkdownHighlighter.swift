@@ -25,7 +25,7 @@ final class MarkdownHighlighter {
         var codeColor: NSColor
 
         init(settings: EditorSettings, theme: Theme?) {
-            font = settings.fontFamily.font(ofSize: settings.fontSize)
+            font = settings.bodyFont
             boldFont = settings.fontFamily.boldFont(ofSize: settings.fontSize)
             codeFont = EditorSettings.FontFamily.monospacedFont(ofSize: settings.fontSize)
             textColor = theme?.foreground ?? .textColor

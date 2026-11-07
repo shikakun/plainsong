@@ -201,11 +201,15 @@ final class DocumentPrintView: NSView {
             crossLength: isVertical ? pageSize.width : pageSize.height
         )
         manuscriptGeometry = geometry
-        let body = settings.fontFamily.font(ofSize: geometry.fontSize)
-        let font = CTFontCreateForString(body, "あ" as CFString, CFRange(location: 0, length: 1)) as NSFont
+        let font = EditorSettings.japaneseFont(for: settings.fontFamily.font(ofSize: geometry.fontSize))
         japaneseMiddle = (font.ascender + font.descender) / 2
         setBodyText(font: font, paragraphStyle: .default)
-        JapaneseTypesetter(textView: textView).update(usesKerning: false, isVertical: isVertical, isManuscript: true)
+        JapaneseTypesetter(textView: textView).update(
+            usesKerning: false,
+            isVertical: isVertical,
+            manuscriptFont: font,
+            fixesCellAdvance: false
+        )
 
         let lines = settings.manuscriptPaper.placements(in: text as NSString)
         manuscriptPages = stride(from: 0, to: max(lines.count, 1), by: ManuscriptPaper.linesPerPage).map { start in
@@ -218,7 +222,8 @@ final class DocumentPrintView: NSView {
         layoutManager.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
             guard let paragraph = (fragment.textElement as? NSTextParagraph)?.attributedString else { return true }
             let origin = fragment.layoutFragmentFrame.origin
-            lines += fragment.textLineFragments.map {
+            // 末尾の改行のあとの空の行だけのページを作らない
+            lines += fragment.textLineFragments.filter { $0.characterRange.length > 0 }.map {
                 PlacedLine(line: $0, fragmentOrigin: origin, paragraph: paragraph)
             }
             return true

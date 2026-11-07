@@ -18,6 +18,7 @@ struct DocumentPrintingTests {
         _ text: String,
         orientation: EditorSettings.Orientation = .horizontal,
         showsManuscriptGuide: Bool = false,
+        paperSize: NSSize = NSSize(width: 595.28, height: 841.89),
         configure: (DocumentPrintView) -> Void = { _ in }
     ) throws -> NSPrintOperation {
         var settings = EditorSettings()
@@ -26,7 +27,7 @@ struct DocumentPrintingTests {
         let operation = DocumentPrintView.operation(
             text: text,
             settings: settings,
-            printInfo: printInfo(paperSize: NSSize(width: 595.28, height: 841.89))
+            printInfo: printInfo(paperSize: paperSize)
         )
         try configure(#require(operation.view as? DocumentPrintView))
         return operation
@@ -83,6 +84,18 @@ struct DocumentPrintingTests {
         let printed = try pages(printedBy: operation(text, orientation: orientation))
         #expect(printed.count > 1)
         #expect(printed.joined().count { $0 == "印" } == 400)
+        #expect(printed.joined().count { $0 == "1" } == 400)
+    }
+
+    @Test
+    func ignoresTheEmptyLineAfterATrailingNewline() throws {
+        let paperSize = NSSize(width: 300, height: 300)
+        for lines in 1 ... 12 {
+            let text = Array(repeating: "あ", count: lines).joined(separator: "\n")
+            let withoutNewline = try pages(printedBy: operation(text, paperSize: paperSize))
+            let withNewline = try pages(printedBy: operation(text + "\n", paperSize: paperSize))
+            #expect(withNewline.count == withoutNewline.count, "\(lines)")
+        }
     }
 
     @Test
@@ -147,12 +160,31 @@ struct DocumentPrintingTests {
     }
 
     /// 縦中横は回転させて描くので、位置を誤ると字が欠ける。横書きと同じ字形なので、同じくらいのインクになる
-    @Test
-    func printsTwoDigitsInACellAsInHorizontalText() throws {
-        let vertical = try manuscriptBodyPixels("12", orientation: .vertical).count { $0 < 250 }
-        let horizontal = try manuscriptBodyPixels("12", orientation: .horizontal).count { $0 < 250 }
+    @Test(arguments: ["12", "ｶﾞ"])
+    func printsAPairInACellAsInHorizontalText(pair: String) throws {
+        let vertical = try manuscriptBodyPixels(pair, orientation: .vertical).count { $0 < 250 }
+        let horizontal = try manuscriptBodyPixels(pair, orientation: .horizontal).count { $0 < 250 }
         #expect(horizontal > 0)
         #expect(abs(vertical - horizontal) * 4 < horizontal, "\(vertical), \(horizontal)")
+    }
+
+    /// 字の進む方向でのインクの範囲
+    private func inkExtent(_ text: String, orientation: EditorSettings.Orientation) throws -> ClosedRange<Int> {
+        let page = try manuscriptBodyPixels(text, orientation: orientation)
+        let extent = page.indices.filter { page[$0] < 128 }.map { orientation == .vertical ? $0 / 595 : $0 % 595 }
+        return try #require(extent.min()) ... #require(extent.max())
+    }
+
+    @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical], ["ｶﾞ", "かﾞ", "é"])
+    func printsCharactersWithoutOneFullWidthGlyphInsideTheirCells(
+        orientation: EditorSettings.Orientation,
+        character: String
+    ) throws {
+        let ink = try inkExtent(character, orientation: orientation)
+        let reference = try inkExtent("国", orientation: orientation)
+        #expect(ink.count <= reference.count + 2, "\(ink), \(reference)")
+        let offset = abs(ink.lowerBound + ink.upperBound - reference.lowerBound - reference.upperBound)
+        #expect(offset <= 4, "\(ink), \(reference)")
     }
 
     /// 字間を指定して組むとフォントの文字ペアの詰めが効き、モチベーションのーなどから後ろがマスからずれる

@@ -26,7 +26,7 @@ final nonisolated class ManuscriptTextContainer: NSTextContainer {
         else { return rect }
         let cells = paper.cells(ofLineAt: characterIndex, in: storage.mutableString)
         if cells > 0 {
-            // 絵文字は1字分よりわずかに広い。次の文字が入らない範囲で余裕を持たせ、計算どおりの字数で折り返す
+            // 丸め誤差で最後の字が次の行に送られないよう、次の字が入らない範囲で余裕を持たせる
             rect.size.width = (CGFloat(cells) + 0.25) * cellWidth
         }
         return rect
