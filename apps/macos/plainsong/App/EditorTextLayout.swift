@@ -101,7 +101,7 @@ final nonisolated class ParagraphIndentRules: NSObject, NSTextContentStorageDele
     private static let openingBrackets = Set("「『（〔［｛〈《【〘〖〝｟⦅".utf16)
 
     /// 空白で始まる段落は、自分で字下げしたものとして二重に下げない
-    private static func indents(paragraphStartingWith character: unichar) -> Bool {
+    static func indents(paragraphStartingWith character: unichar) -> Bool {
         guard let scalar = Unicode.Scalar(character) else { return true }
         return !openingBrackets.contains(character) && !CharacterSet.whitespaces.contains(scalar)
     }

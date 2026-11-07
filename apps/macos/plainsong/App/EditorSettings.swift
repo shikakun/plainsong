@@ -2,7 +2,7 @@ import AppKit
 
 struct EditorSettings: Equatable {
     static let fontSizes: [CGFloat] = [12, 14, 16, 18, 21]
-    static let tabEms: CGFloat = 2
+    nonisolated static let tabEms: CGFloat = 2
 
     /// 下書きは、この設定に関係なく常に保存する
     nonisolated enum FileAutosave: String, CaseIterable {
@@ -69,6 +69,10 @@ struct EditorSettings: Equatable {
 
     var enabledStatusBarItems: [StatusBarItemKind] {
         statusBarItems.filter(\.isEnabled).map(\.kind)
+    }
+
+    var manuscriptPaper: ManuscriptPaper {
+        ManuscriptPaper(indent: indentsParagraphs ? Int(paragraphIndent.ems) : 0)
     }
 
     func paragraphStyle(lineHeight: CGFloat) -> NSParagraphStyle {

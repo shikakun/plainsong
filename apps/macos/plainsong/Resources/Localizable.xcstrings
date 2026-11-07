@@ -2844,6 +2844,50 @@
         }
       }
     },
+    "statusBar.manuscriptPages %lld" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld page"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld pages"
+                }
+              }
+            }
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld枚"
+          }
+        }
+      }
+    },
+    "statusBar.manuscriptPages.selected %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld selected"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld枚を選択中"
+          }
+        }
+      }
+    },
     "statusBar.wordCount %lld" : {
       "localizations" : {
         "en" : {
@@ -2980,6 +3024,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "ファイルの改行コードを表示します"
+          }
+        }
+      }
+    },
+    "statusBarItem.manuscriptPages" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manuscript Pages"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原稿用紙の枚数"
+          }
+        }
+      }
+    },
+    "statusBarItem.manuscriptPages.summary" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shows how many pages the text would fill on 400-character manuscript paper"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "400字詰めの原稿用紙に書いた場合の枚数を表示します"
           }
         }
       }
