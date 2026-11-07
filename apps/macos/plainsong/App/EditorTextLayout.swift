@@ -131,6 +131,32 @@ final nonisolated class ParagraphIndentRules: NSObject, NSTextContentStorageDele
     }
 }
 
+extension EditorWindowController {
+    /// TextKit 2が組む、行間を含まない1行の高さを求める
+    private static let metrics = NSLayoutManager()
+
+    /// 明朝体の欧文は文字サイズによって行の高さが1ptずれるので、フォントを切り替えても行送りが変わらないようゴシック体の高さに揃える
+    static func lineHeight(of settings: EditorSettings) -> CGFloat {
+        metrics.defaultLineHeight(for: EditorSettings.FontFamily.sansSerif.font(ofSize: settings.fontSize))
+    }
+
+    /// scrollableTextView()ではレイアウトマネージャーを差し替えられないので、同じ構成を自分で組む
+    static func makeTextView() -> (NSTextView, LineHeightSegmentLayoutManager) {
+        let layoutManager = LineHeightSegmentLayoutManager()
+        let contentStorage = TrailingNewlineContentStorage()
+        contentStorage.addTextLayoutManager(layoutManager)
+        contentStorage.delegate = ParagraphIndentRules.shared
+        let container = ManuscriptTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
+        container.widthTracksTextView = true
+        layoutManager.textContainer = container
+        let textView = NSTextView(frame: .zero, textContainer: container)
+        textView.autoresizingMask = [.width, .height]
+        textView.isVerticallyResizable = true
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        return (textView, layoutManager)
+    }
+}
+
 extension NSTextView {
     /// textContainerInsetは行頭と行末に同じ幅しか空けられないので、行末の余白はテキストコンテナの幅で決める
     /// 縦書きでもテキストコンテナの幅が行の長さになるので、clipLengthには行に使える高さを渡す

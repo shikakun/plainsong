@@ -4,6 +4,7 @@ final class JapaneseTypesetter {
     private weak var textView: NSTextView?
     private var usesKerning = false
     private var isVertical = false
+    private var isManuscript = false
     private var replacements: [UprightGlyphs.Kind: [NSFont: NSFont]] = [:]
 
     init(textView: NSTextView) {
@@ -15,9 +16,10 @@ final class JapaneseTypesetter {
         usesKerning ? nil : 0
     }
 
-    func update(usesKerning: Bool, isVertical: Bool) {
+    func update(usesKerning: Bool, isVertical: Bool, isManuscript: Bool = false) {
         self.usesKerning = usesKerning
         self.isVertical = isVertical
+        self.isManuscript = isManuscript
         replacements.removeAll()
         textView?.typingAttributes[.kern] = baseKern
         guard let storage = textView?.textStorage else { return }
@@ -61,10 +63,7 @@ final class JapaneseTypesetter {
         if let composing, let composingRange = Range(composing) {
             settled.remove(integersIn: composingRange)
         }
-        let runs = isVertical
-            ? settled.rangeView.flatMap { UprightGlyphs.runs(in: string, range: NSRange($0)) }
-            .filter { !isCode(at: $0.range.location, in: storage) }
-            : []
+        let runs = runs(in: settled, of: string, storage: storage)
         restoreOriginalFonts(in: enclosing, of: storage, keeping: runs)
         runs.forEach { replaceFont(of: $0, in: storage) }
 
@@ -81,6 +80,17 @@ final class JapaneseTypesetter {
         inherited.subtract(fixed)
         fixed.rangeView.forEach { write(.kern, 0 as NSNumber, in: NSRange($0), of: storage) }
         inherited.rangeView.forEach { write(.kern, nil, in: NSRange($0), of: storage) }
+    }
+
+    private func runs(in settled: IndexSet, of string: NSString, storage: NSTextStorage) -> [UprightGlyphs.Run] {
+        if isManuscript {
+            return settled.rangeView.flatMap {
+                UprightGlyphs.manuscriptRuns(in: string, range: NSRange($0), isVertical: isVertical)
+            }
+        }
+        guard isVertical else { return [] }
+        return settled.rangeView.flatMap { UprightGlyphs.runs(in: string, range: NSRange($0)) }
+            .filter { !isCode(at: $0.range.location, in: storage) }
     }
 
     private func restoreOriginalFonts(in range: NSRange, of storage: NSTextStorage, keeping runs: [UprightGlyphs.Run]) {
@@ -113,7 +123,7 @@ final class JapaneseTypesetter {
         write(.font, replacement, in: run.range, of: storage)
         write(.uprightGlyphs, run.kind.rawValue as NSNumber, in: run.range, of: storage)
         write(.uprightOriginalFont, original, in: run.range, of: storage)
-        write(.verticalGlyphForm, run.kind == .upright ? 1 as NSNumber : nil, in: run.range, of: storage)
+        write(.verticalGlyphForm, run.kind == .upright && isVertical ? 1 as NSNumber : nil, in: run.range, of: storage)
     }
 
     /// 同じ値でも書き込むとTextKitが段落を組み直すので、変わるところだけ書き込む

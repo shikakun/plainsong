@@ -7,6 +7,7 @@ final class GeneralSettingsPane: SettingsPane {
     private let fontSizeSlider = NSSlider()
     private let lineSpacingControl = NSSegmentedControl()
     private let orientationOptions: OrientationOptions
+    private let manuscriptGuideOptions: ManuscriptGuideOptions
     private let kerningCheckbox = NSButton(
         checkboxWithTitle: String(localized: "settings.kerning"),
         target: nil,
@@ -70,6 +71,7 @@ final class GeneralSettingsPane: SettingsPane {
         self.model = model
         self.relaunch = relaunch
         orientationOptions = OrientationOptions(model: model)
+        manuscriptGuideOptions = ManuscriptGuideOptions(model: model)
         super.init(title: String(localized: "settings.general"))
         NotificationCenter.default.addObserver(
             self,
@@ -137,13 +139,14 @@ final class GeneralSettingsPane: SettingsPane {
         sliderRow.yPlacement = .center
 
         let orientationGrid = orientationOptions.makeSection()
+        let guideGrid = manuscriptGuideOptions.makeSection()
         let optionsGrid = makeOptionsSection()
         let popUpGrid = Self.columns([makeLanguageRow(), makeIconRow()])
         let filesGrid = makeFilesSection()
         let startupGrid = makeStartupSection()
         updateSettingsControls()
-        Self.alignLabelColumns([grid, orientationGrid, optionsGrid, filesGrid, popUpGrid, startupGrid])
-        return [grid, orientationGrid, optionsGrid, filesGrid, Self.separator(), popUpGrid, startupGrid]
+        Self.alignLabelColumns([grid, orientationGrid, guideGrid, optionsGrid, filesGrid, popUpGrid, startupGrid])
+        return [grid, orientationGrid, guideGrid, optionsGrid, filesGrid, Self.separator(), popUpGrid, startupGrid]
     }
 
     private func makeLanguageRow() -> [NSView] {
@@ -223,6 +226,8 @@ final class GeneralSettingsPane: SettingsPane {
         lineSpacingControl.selectedSegment =
             EditorSettings.LineSpacing.allCases.firstIndex(of: settings.lineSpacing) ?? 0
         orientationOptions.update(with: settings)
+        manuscriptGuideOptions.update(with: settings)
+        updateControlsIgnoredByManuscriptGuide(with: settings)
         kerningCheckbox.state = settings.usesKerning ? .on : .off
         readableWidthCheckbox.state = settings.usesReadableWidth ? .on : .off
         readableWidthButton.selectItem(for: settings.readableWidth)
@@ -335,6 +340,16 @@ final class GeneralSettingsPane: SettingsPane {
 }
 
 extension GeneralSettingsPane {
+    /// 原稿用紙のガイドでは効かない項目。設定値は残すので、ガイドをオフにすると元に戻る
+    private func updateControlsIgnoredByManuscriptGuide(with settings: EditorSettings) {
+        for control: NSControl in [
+            kerningCheckbox, paragraphSpacingCheckbox, paragraphSpacingButton,
+            readableWidthCheckbox, readableWidthButton, markdownCheckbox,
+        ] {
+            control.isEnabled = !settings.showsManuscriptGuide
+        }
+    }
+
     private func makeOptionsSection() -> NSGridView {
         kerningCheckbox.target = self
         kerningCheckbox.action = #selector(changeKerning(_:))

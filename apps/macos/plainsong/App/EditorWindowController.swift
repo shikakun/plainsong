@@ -20,6 +20,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private var toolbar: EditorToolbar?
     private var statusBar: StatusBar?
     private var lineNumberView: LineNumberView?
+    private var manuscriptGridView: ManuscriptGridView?
     private var theme: Theme?
     /// 「デフォルト」とテーマにないキーは、NSTextViewが最初に持っている選択範囲の色に戻す
     private let standardSelectedTextAttributes: [NSAttributedString.Key: Any]
@@ -137,10 +138,13 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         let orientationChanged = settings.orientation != previous?.orientation ?? .horizontal
         if orientationChanged {
             textView.discardMarkedTextIfNeeded()
-            // 縦書きでは、立てる英数に差し替えた和文のフォントの行間で行送りが広がるので、フォントの行間を使わない
-            // 横書きでは、使わないと明朝体のベースラインがずれる
-            layoutManager.usesFontLeading = settings.orientation == .horizontal
             textView.setLayoutOrientation(settings.orientation.layoutOrientation)
+        }
+        // 縦書きと原稿用紙では、立てる英数に差し替えた和文のフォントの行間で行送りが広がるので、フォントの行間を使わない
+        // 横書きでは、使わないと明朝体のベースラインがずれる
+        let usesFontLeading = settings.orientation == .horizontal && !settings.showsManuscriptGuide
+        if layoutManager.usesFontLeading != usesFontLeading {
+            layoutManager.usesFontLeading = usesFontLeading
         }
         let typesettingChanged = settings.fontFamily != previous?.fontFamily
             || settings.fontSize != previous?.fontSize
@@ -151,7 +155,12 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
             || settings.indentsParagraphs != previous?.indentsParagraphs
             || settings.paragraphIndent != previous?.paragraphIndent
             || settings.usesReadableWidth != previous?.usesReadableWidth
+            || settings.showsManuscriptGuide != previous?.showsManuscriptGuide
         if typesettingChanged {
+            if let container = textView.textContainer as? ManuscriptTextContainer {
+                container.paper = settings.showsManuscriptGuide ? settings.manuscriptPaper : nil
+                container.cellWidth = settings.fontSize
+            }
             applyFont(of: settings)
         }
         // 起動して「デフォルト」のままなら、システムの色のままなので何もしない
@@ -165,8 +174,10 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         }
         applyWhitespace(of: settings)
         applyLineNumbers(of: settings)
+        applyManuscriptGrid(of: settings)
         observeClipViewFrame(
-            settings.usesReadableWidth || settings.showsLineNumbers || settings.orientation == .vertical
+            settings.usesReadableWidth || settings.showsManuscriptGuide
+                || settings.showsLineNumbers || settings.orientation == .vertical
         )
         applyToolbar(of: settings)
         applyStatusBar(of: settings)
@@ -176,12 +187,14 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
 
     /// 本文全体を1回の編集で書き換える。属性の変更なので、TextStoreは記録せず、取り消しの履歴にも入らない
     private func applyFont(of settings: EditorSettings) {
-        let font = settings.fontFamily.font(ofSize: settings.fontSize)
+        let bodyFont = settings.fontFamily.font(ofSize: settings.fontSize)
         let lineHeight = Self.lineHeight(of: settings)
         let paragraphStyle = settings.paragraphStyle(lineHeight: lineHeight)
         layoutManager.lineHeight = lineHeight
-        let japanese = CTFontCreateForString(font, "あ" as CFString, CFRange(location: 0, length: 1)) as NSFont
+        let japanese = CTFontCreateForString(bodyFont, "あ" as CFString, CFRange(location: 0, length: 1)) as NSFont
         layoutManager.japaneseMiddle = (japanese.ascender + japanese.descender) / 2
+        // 字送りを揃えるために和文のフォントへ差し替えると、その文字を含む行だけ高さの基準が変わり、マスからずれる
+        let font = settings.showsManuscriptGuide ? japanese : bodyFont
 
         // defaultParagraphStyleは、変換を通さずに入力した文字には付かないので、入力する文字の属性に指定する
         textView.typingAttributes[.font] = font
@@ -208,6 +221,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
             ?? standardSelectedTextAttributes[.foregroundColor]
         textView.selectedTextAttributes = selectedTextAttributes
         statusBar?.backgroundColor = theme?.background
+        manuscriptGridView?.color = theme?.foreground ?? .labelColor
         whitespaceMarkers.color = theme?.foreground.map { $0.withAlphaComponent(0.3) } ?? .tertiaryLabelColor
         if whitespaceMarkers.scope != nil || whitespaceMarkers.showsNewlines {
             redrawText()
@@ -215,7 +229,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private var markdownFlavor: MarkdownSyntax.Flavor? {
-        guard settings?.highlightsMarkdown == true else { return nil }
+        // 原稿用紙では、記法で変えたフォントや字下げがマスからずれる
+        guard let settings, settings.highlightsMarkdown, !settings.showsManuscriptGuide else { return nil }
         return MarkdownSyntax.Flavor(url: (document as? NSDocument)?.fileURL)
     }
 
@@ -224,7 +239,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private func applyMarkdown() {
         guard let settings else { return }
         markdownHighlighter.update(flavor: markdownFlavor, appearance: .init(settings: settings, theme: theme))
-        typesetter.update(usesKerning: settings.usesKerning, isVertical: settings.orientation == .vertical)
+        typesetter.update(
+            usesKerning: settings.usesKerning && !settings.showsManuscriptGuide,
+            isVertical: settings.orientation == .vertical,
+            isManuscript: settings.showsManuscriptGuide
+        )
     }
 
     private func applyWhitespace(of settings: EditorSettings) {
@@ -266,18 +285,6 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
             view.subviews.forEach(setNeedsDisplay)
         }
         setNeedsDisplay(textView)
-    }
-
-    private func applyLineNumbers(of settings: EditorSettings) {
-        if settings.showsLineNumbers, lineNumberView == nil {
-            let lineNumberView = LineNumberView(textView: textView)
-            container.addSubview(lineNumberView, positioned: .above, relativeTo: scrollView)
-            self.lineNumberView = lineNumberView
-        } else if !settings.showsLineNumbers {
-            lineNumberView?.removeFromSuperview()
-            lineNumberView = nil
-        }
-        lineNumberView?.fontSize = settings.fontSize
     }
 
     private func applyToolbar(of settings: EditorSettings) {
@@ -341,28 +348,34 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
 }
 
 extension EditorWindowController {
-    /// TextKit 2が組む、行間を含まない1行の高さを求める
-    private static let metrics = NSLayoutManager()
-
-    /// 明朝体の欧文は文字サイズによって行の高さが1ptずれるので、フォントを切り替えても行送りが変わらないようゴシック体の高さに揃える
-    static func lineHeight(of settings: EditorSettings) -> CGFloat {
-        metrics.defaultLineHeight(for: EditorSettings.FontFamily.sansSerif.font(ofSize: settings.fontSize))
+    private func applyLineNumbers(of settings: EditorSettings) {
+        if settings.showsLineNumbers, lineNumberView == nil {
+            let lineNumberView = LineNumberView(textView: textView)
+            container.addSubview(lineNumberView, positioned: .above, relativeTo: scrollView)
+            self.lineNumberView = lineNumberView
+        } else if !settings.showsLineNumbers {
+            lineNumberView?.removeFromSuperview()
+            lineNumberView = nil
+        }
+        lineNumberView?.fontSize = settings.fontSize
     }
 
-    /// scrollableTextView()ではレイアウトマネージャーを差し替えられないので、同じ構成を自分で組む
-    static func makeTextView() -> (NSTextView, LineHeightSegmentLayoutManager) {
-        let layoutManager = LineHeightSegmentLayoutManager()
-        let contentStorage = TrailingNewlineContentStorage()
-        contentStorage.addTextLayoutManager(layoutManager)
-        contentStorage.delegate = ParagraphIndentRules.shared
-        let container = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
-        container.widthTracksTextView = true
-        layoutManager.textContainer = container
-        let textView = NSTextView(frame: .zero, textContainer: container)
-        textView.autoresizingMask = [.width, .height]
-        textView.isVerticallyResizable = true
-        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        return (textView, layoutManager)
+    private func applyManuscriptGrid(of settings: EditorSettings) {
+        guard settings.showsManuscriptGuide else {
+            manuscriptGridView?.removeFromSuperview()
+            manuscriptGridView = nil
+            return
+        }
+        let gridView = manuscriptGridView ?? ManuscriptGridView(textView: textView)
+        if manuscriptGridView == nil {
+            gridView.frame = container.bounds
+            gridView.autoresizingMask = [.width, .height]
+            container.addSubview(gridView, positioned: .above, relativeTo: scrollView)
+            manuscriptGridView = gridView
+        }
+        gridView.color = theme?.foreground ?? .labelColor
+        gridView.cellSize = settings.fontSize
+        gridView.linePitch = Self.lineHeight(of: settings) * settings.lineSpacing.multiplier
     }
 
     private func titlebarDidChange() {
@@ -414,6 +427,12 @@ extension EditorWindowController {
             settings.showsLineNumbers ? gutter : settings.minimumInset
         }
         let minimumTrailing = isVertical ? bottomInset : settings.minimumInset
+        keepContentLength(
+            settings.showsManuscriptGuide
+                ? minimumLeading + minimumTrailing + fontSize * CGFloat(ManuscriptPaper.cellsPerLine)
+                : nil,
+            isVertical: isVertical
+        )
         let (leading, trailing) = settings.lineInsets(
             clipLength: clipLength,
             minimumLeading: minimumLeading,
@@ -444,6 +463,7 @@ extension EditorWindowController {
             textView.setFrameOrigin(.zero)
         }
         setContentInsets(clipInsets)
+        manuscriptGridView?.needsDisplay = true
         scrollView.scrollerInsets = NSEdgeInsets(top: 0, left: 0, bottom: statusBarHeight, right: 0)
     }
 

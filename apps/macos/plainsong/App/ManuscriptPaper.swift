@@ -18,7 +18,7 @@ nonisolated struct ManuscriptPaper: Equatable {
         }
     }
 
-    private static let cellsPerLine = 20
+    static let cellsPerLine = 20
     private static let linesPerPage = 20
     private static let cellsPerTab = Int(EditorSettings.tabEms)
 
@@ -68,19 +68,57 @@ nonisolated struct ManuscriptPaper: Equatable {
         return lines
     }
 
+    /// `location`から始まる行が使うマスの数を返す。TextKitが行を組むたびに呼ぶので、行が決まるだけの文字しか読まない
+    func cells(ofLineAt location: Int, in string: NSString) -> Int {
+        guard location < string.length else { return 0 }
+        var length = Self.cellsPerLine * 3
+        while true {
+            let end = min(location + length, string.length)
+            let contentsEnd = (location ..< end).first { Self.isLineBreak(string.character(at: $0)) } ?? end
+            let contents = NSRange(location: location, length: contentsEnd - location)
+            let units = Self.units(of: contents, in: string)
+            // 次の字とその次の字まで見れば、行の終わりが決まる
+            if contentsEnd < end || end == string.length || units.count > Self.cellsPerLine + 2 {
+                guard !units.isEmpty else { return 0 }
+                let startCells = isParagraphStart(location, in: string) ? indent(ofContents: contents, in: string) : 0
+                let lineEnd = Self.lineEnd(from: 0, cells: startCells, in: units)
+                return Self.cells(of: 0 ..< lineEnd, from: startCells, in: units)
+            }
+            length *= 2
+        }
+    }
+
+    private func isParagraphStart(_ location: Int, in string: NSString) -> Bool {
+        guard location > 0 else { return true }
+        return Self.isParagraphBreak(string.character(at: location - 1))
+    }
+
+    private static func isParagraphBreak(_ character: unichar) -> Bool {
+        character == 0x0A || character == 0x0D || character == 0x85 || character == 0x2029
+    }
+
+    private static func isLineBreak(_ character: unichar) -> Bool {
+        isParagraphBreak(character) || character == 0x2028
+    }
+
     /// U+2028は段落を分けずに行を変えるので、そのあとの行は字下げしない
     private func indent(ofContents contents: NSRange, in string: NSString) -> Int {
-        guard indent > 0, contents.length > 0,
-              string.paragraphRange(for: NSRange(location: contents.location, length: 0)).location == contents.location,
+        guard indent > 0, contents.length > 0, isParagraphStart(contents.location, in: string),
               ParagraphIndentRules.indents(paragraphStartingWith: string.character(at: contents.location))
         else { return 0 }
         return indent
     }
 
     /// 縦中横の2桁は、組方向によらず1マスに入れる
+    /// 行は語の途中からも始まるので、語の先頭から調べる。2026の後半を2桁とみなさないため
     private static func units(of contents: NSRange, in string: NSString) -> [Unit] {
-        var tateChuYoko = UprightGlyphs.runs(in: string, range: contents)
-            .filter { $0.kind == .tateChuYoko }
+        var tokenStart = contents.location
+        while tokenStart > 0, UprightGlyphs.isHalfWidthGraphic(string.character(at: tokenStart - 1)) {
+            tokenStart -= 1
+        }
+        let searched = NSRange(location: tokenStart, length: NSMaxRange(contents) - tokenStart)
+        var tateChuYoko = UprightGlyphs.runs(in: string, range: searched)
+            .filter { $0.kind == .tateChuYoko && $0.range.location >= contents.location }
             .map(\.range)[...]
         var units: [Unit] = []
         units.reserveCapacity(contents.length)

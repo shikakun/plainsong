@@ -11,12 +11,17 @@ nonisolated enum UprightGlyphs {
     enum Kind: Int {
         case upright = 1
         case tateChuYoko = 2
+        /// 横書きの原稿用紙で、2桁の数字を半角のまま1マスに入れる
+        case halfWidthPair = 3
+        case emoji = 4
     }
 
     struct Run: Equatable {
         var range: NSRange
         var kind: Kind
     }
+
+    private static let emojiFontName = "AppleColorEmoji"
 
     private struct Cell {
         var square: CGRect
@@ -49,6 +54,52 @@ nonisolated enum UprightGlyphs {
         return runs
     }
 
+    /// 原稿用紙では、マスに揃うよう字送りが1字分でない文字をすべて差し替える
+    static func manuscriptRuns(in string: NSString, range: NSRange, isVertical: Bool) -> [Run] {
+        var pairs = runs(in: string, range: range).filter { $0.kind == .tateChuYoko }[...]
+        var result: [Run] = []
+        func append(_ kind: Kind, _ range: NSRange) {
+            if let last = result.last, last.kind == kind, NSMaxRange(last.range) == range.location {
+                result[result.count - 1].range.length += range.length
+            } else {
+                result.append(Run(range: range, kind: kind))
+            }
+        }
+        string.enumerateSubstrings(
+            in: range,
+            options: .byComposedCharacterSequences
+        ) { substring, characterRange, _, _ in
+            if let pair = pairs.first, NSLocationInRange(characterRange.location, pair.range) {
+                if characterRange.location == pair.range.location {
+                    append(isVertical ? .tateChuYoko : .halfWidthPair, pair.range)
+                }
+                if NSMaxRange(characterRange) >= NSMaxRange(pair.range) {
+                    pairs.removeFirst()
+                }
+                return
+            }
+            guard let substring, let scalar = substring.unicodeScalars.first else { return }
+            if scalar.properties.isEmojiPresentation || substring.unicodeScalars.contains("\u{FE0F}") {
+                append(.emoji, characterRange)
+            } else if isNarrow(scalar) {
+                append(.upright, characterRange)
+            }
+        }
+        return result
+    }
+
+    /// アクセント記号の付いた文字などは、和文のフォントに全角の字形がなく、差し替えても1字分にならない
+    private static func isNarrow(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x20 ... 0x7E, // 基本ラテン文字
+             0x2010 ... 0x2027, 0x2030 ... 0x205E, // ダッシュ、三点リーダ、引用符など
+             0xFF61 ... 0xFF9F: // 半角カタカナ
+            true
+        default:
+            false
+        }
+    }
+
     private static func isUpright(_ characters: [unichar]) -> Bool {
         if characters.count == 1 {
             return isDigit(characters[0]) || isUppercase(characters[0]) || isLowercase(characters[0])
@@ -56,7 +107,7 @@ nonisolated enum UprightGlyphs {
         return characters.allSatisfy { isDigit($0) || isUppercase($0) } && characters.contains(where: isUppercase)
     }
 
-    private static func isHalfWidthGraphic(_ character: unichar) -> Bool {
+    static func isHalfWidthGraphic(_ character: unichar) -> Bool {
         (0x21 ... 0x7E).contains(character)
     }
 
@@ -73,9 +124,13 @@ nonisolated enum UprightGlyphs {
     }
 
     /// 字間で字送りを調整するとカーソルや選択範囲がずれるので、字送りが1字分の字形に差し替える
+    /// 絵文字の字送りは1.25字分なので、0.8倍にすると1字分になる
     static func font(for kind: Kind, replacing font: NSFont) -> NSFont {
+        if kind == .emoji {
+            return NSFont(name: emojiFontName, size: font.pointSize * 0.8) ?? font
+        }
         let japanese = CTFontCreateForString(font, "あ" as CFString, CFRange(location: 0, length: 1)) as NSFont
-        let tag = kind == .tateChuYoko ? "hwid" : "fwid"
+        let tag = kind == .tateChuYoko || kind == .halfWidthPair ? "hwid" : "fwid"
         let feature: [NSFontDescriptor.FeatureKey: Any] = [
             NSFontDescriptor.FeatureKey(rawValue: kCTFontOpenTypeFeatureTag as String): tag,
             NSFontDescriptor.FeatureKey(rawValue: kCTFontOpenTypeFeatureValue as String): 1,
@@ -84,9 +139,9 @@ nonisolated enum UprightGlyphs {
         return NSFont(descriptor: descriptor, size: font.pointSize) ?? font
     }
 
-    /// 本文のフォントにはOpenType機能を指定しないので、指定があれば差し替えたフォントとみなす
+    /// 本文のフォントにはOpenType機能を指定せず、絵文字のフォントも指定しないので、それらがあれば差し替えたフォントとみなす
     static func isReplacement(_ font: NSFont) -> Bool {
-        font.fontDescriptor.object(forKey: .featureSettings) != nil
+        font.fontDescriptor.object(forKey: .featureSettings) != nil || font.fontName == emojiFontName
     }
 
     /// 回転させて描き直せば、選択中の文字色や描画用の属性の色をTextKitが塗り分ける

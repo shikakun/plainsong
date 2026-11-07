@@ -38,6 +38,7 @@ struct EditorSettings: Equatable {
     var fontSize: CGFloat = 16
     var lineSpacing = LineSpacing.standard
     var orientation = Orientation.horizontal
+    var showsManuscriptGuide = false
     var usesKerning = false
     var usesReadableWidth = false
     var readableWidth = ReadableWidth.standard
@@ -80,7 +81,11 @@ struct EditorSettings: Equatable {
         paragraphStyle.minimumLineHeight = lineHeight
         paragraphStyle.maximumLineHeight = lineHeight
         paragraphStyle.lineSpacing = lineHeight * (lineSpacing.multiplier - 1)
-        paragraphStyle.paragraphSpacing = addsParagraphSpacing ? lineHeight * paragraphSpacing.lines : 0
+        paragraphStyle.paragraphSpacing = addsParagraphSpacing && !showsManuscriptGuide
+            ? lineHeight * paragraphSpacing.lines
+            : 0
+        // 原稿用紙の禁則は`ManuscriptPaper`が決めるので、TextKitの禁則や単語の折り返しを止める
+        paragraphStyle.lineBreakMode = showsManuscriptGuide ? .byCharWrapping : .byWordWrapping
         paragraphStyle.firstLineHeadIndent = indentsParagraphs ? fontSize * paragraphIndent.ems : 0
         // 標準のタブストップは28pt間隔で12個しかないので、空にして`defaultTabInterval`の間隔で並べる
         paragraphStyle.tabStops = []
@@ -92,6 +97,7 @@ struct EditorSettings: Equatable {
     private static let fontSizeKey = "fontSize"
     private static let lineSpacingKey = "lineSpacing"
     private static let orientationKey = "orientation"
+    private static let showsManuscriptGuideKey = "showsManuscriptGuide"
     private static let usesKerningKey = "usesKerning"
     private static let usesReadableWidthKey = "usesReadableWidth"
     private static let readableWidthKey = "readableWidth"
@@ -125,6 +131,7 @@ struct EditorSettings: Equatable {
         }
         settings.lineSpacing = defaults.value(forKey: lineSpacingKey, default: settings.lineSpacing)
         settings.orientation = defaults.value(forKey: orientationKey, default: settings.orientation)
+        settings.showsManuscriptGuide = defaults.bool(forKey: showsManuscriptGuideKey)
         if let usesKerning = defaults.object(forKey: usesKerningKey) as? Bool {
             settings.usesKerning = usesKerning
         }
@@ -175,6 +182,7 @@ struct EditorSettings: Equatable {
         defaults.set(Double(fontSize), forKey: Self.fontSizeKey)
         defaults.set(lineSpacing.rawValue, forKey: Self.lineSpacingKey)
         defaults.set(orientation.rawValue, forKey: Self.orientationKey)
+        defaults.set(showsManuscriptGuide, forKey: Self.showsManuscriptGuideKey)
         defaults.set(usesKerning, forKey: Self.usesKerningKey)
         defaults.set(usesReadableWidth, forKey: Self.usesReadableWidthKey)
         defaults.set(readableWidth.rawValue, forKey: Self.readableWidthKey)
@@ -424,8 +432,9 @@ extension EditorSettings {
         minimumLeading: CGFloat,
         minimumTrailing: CGFloat
     ) -> (leading: CGFloat, trailing: CGFloat) {
-        guard usesReadableWidth else { return (minimumLeading, minimumTrailing) }
-        let maximumLength = fontSize * readableWidth.ems(in: orientation)
+        guard usesReadableWidth || showsManuscriptGuide else { return (minimumLeading, minimumTrailing) }
+        let ems = showsManuscriptGuide ? CGFloat(ManuscriptPaper.cellsPerLine) : readableWidth.ems(in: orientation)
+        let maximumLength = fontSize * ems
         let centeringInset = ((clipLength - maximumLength) / 2).rounded(.down)
         if centeringInset >= max(minimumLeading, minimumTrailing) {
             return (centeringInset, centeringInset)
