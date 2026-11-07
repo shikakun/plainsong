@@ -1264,6 +1264,22 @@
         }
       }
     },
+    "print.showsRuledLines" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Print Ruled Lines"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "罫線を印刷"
+          }
+        }
+      }
+    },
     "settings.addsParagraphSpacing" : {
       "localizations" : {
         "en" : {
@@ -1573,13 +1589,61 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Guides"
+            "value" : "Guide"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "ガイド"
+          }
+        }
+      }
+    },
+    "settings.guide.blank" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blank"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "白紙"
+          }
+        }
+      }
+    },
+    "settings.guide.manuscriptPaper" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manuscript Paper"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原稿用紙"
+          }
+        }
+      }
+    },
+    "settings.guide.ruledLines" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ruled Lines"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "罫線"
           }
         }
       }
@@ -1900,22 +1964,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "標準"
-          }
-        }
-      }
-    },
-    "settings.manuscriptGuide" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Manuscript Paper"
-          }
-        },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "原稿用紙"
           }
         }
       }

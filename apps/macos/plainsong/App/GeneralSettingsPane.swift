@@ -7,7 +7,7 @@ final class GeneralSettingsPane: SettingsPane {
     private let fontSizeSlider = NSSlider()
     private let lineSpacingControl = NSSegmentedControl()
     private let orientationOptions: OrientationOptions
-    private let manuscriptGuideOptions: ManuscriptGuideOptions
+    private let guideOptions: GuideOptions
     private let kerningCheckbox = NSButton(
         checkboxWithTitle: String(localized: "settings.kerning"),
         target: nil,
@@ -71,7 +71,7 @@ final class GeneralSettingsPane: SettingsPane {
         self.model = model
         self.relaunch = relaunch
         orientationOptions = OrientationOptions(model: model)
-        manuscriptGuideOptions = ManuscriptGuideOptions(model: model)
+        guideOptions = GuideOptions(model: model)
         super.init(title: String(localized: "settings.general"))
         NotificationCenter.default.addObserver(
             self,
@@ -139,7 +139,7 @@ final class GeneralSettingsPane: SettingsPane {
         sliderRow.yPlacement = .center
 
         let orientationGrid = orientationOptions.makeSection()
-        let guideGrid = manuscriptGuideOptions.makeSection()
+        let guideGrid = guideOptions.makeSection()
         let optionsGrid = makeOptionsSection()
         let popUpGrid = Self.columns([makeLanguageRow(), makeIconRow()])
         let filesGrid = makeFilesSection()
@@ -226,8 +226,8 @@ final class GeneralSettingsPane: SettingsPane {
         lineSpacingControl.selectedSegment =
             EditorSettings.LineSpacing.allCases.firstIndex(of: settings.lineSpacing) ?? 0
         orientationOptions.update(with: settings)
-        manuscriptGuideOptions.update(with: settings)
-        updateControlsIgnoredByManuscriptGuide(with: settings)
+        guideOptions.update(with: settings)
+        updateControlsIgnoredByGuide(with: settings)
         kerningCheckbox.state = settings.usesKerning ? .on : .off
         readableWidthCheckbox.state = settings.usesReadableWidth ? .on : .off
         readableWidthButton.selectItem(for: settings.readableWidth)
@@ -340,11 +340,12 @@ final class GeneralSettingsPane: SettingsPane {
 }
 
 extension GeneralSettingsPane {
-    private func updateControlsIgnoredByManuscriptGuide(with settings: EditorSettings) {
-        for control: NSControl in [
-            kerningCheckbox, paragraphSpacingCheckbox, paragraphSpacingButton, markdownCheckbox,
-        ] {
+    private func updateControlsIgnoredByGuide(with settings: EditorSettings) {
+        for control: NSControl in [kerningCheckbox, markdownCheckbox] {
             control.isEnabled = !settings.showsManuscriptGuide
+        }
+        for control: NSControl in [paragraphSpacingCheckbox, paragraphSpacingButton] {
+            control.isEnabled = settings.guide == .blank
         }
     }
 
@@ -474,7 +475,7 @@ extension GeneralSettingsPane {
     }
 }
 
-private extension NSPopUpButton {
+extension NSPopUpButton {
     func addItems<Value: CaseIterable>(for _: Value.Type, title: (Value) -> String) {
         for value in Value.allCases {
             addItem(withTitle: title(value))

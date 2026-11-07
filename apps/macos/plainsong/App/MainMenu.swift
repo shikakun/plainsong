@@ -135,6 +135,9 @@ enum MainMenu {
         let orientations = EditorSettings.Orientation.allCases.map { orientation in
             choice(orientation.title, #selector(AppDelegate.selectOrientation(_:)), orientation)
         }
+        let guides = EditorSettings.Guide.allCases.map { guide in
+            choice(guide.title, #selector(AppDelegate.selectGuide(_:)), guide)
+        }
         return menu("menu.view", [
             submenu("settings.fontSize", [
                 item("menu.fontSize.bigger", #selector(AppDelegate.increaseFontSize(_:)), key: "+"),
@@ -144,6 +147,7 @@ enum MainMenu {
             submenu("settings.lineSpacing", lineSpacings),
             submenu("settings.fontFamily", fontFamilies),
             submenu("settings.orientation", orientations),
+            submenu("settings.guide", guides),
             .separator(),
             toggle("settings.kerning", \.usesKerning, key: "k"),
             toggle("settings.showsNewlines", \.showsNewlines, key: "l"),

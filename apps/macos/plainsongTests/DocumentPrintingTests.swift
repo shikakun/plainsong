@@ -17,13 +17,13 @@ struct DocumentPrintingTests {
     private func operation(
         _ text: String,
         orientation: EditorSettings.Orientation = .horizontal,
-        showsManuscriptGuide: Bool = false,
+        guide: EditorSettings.Guide = .blank,
         paperSize: NSSize = NSSize(width: 595.28, height: 841.89),
         configure: (DocumentPrintView) -> Void = { _ in }
     ) throws -> NSPrintOperation {
         var settings = EditorSettings()
         settings.orientation = orientation
-        settings.showsManuscriptGuide = showsManuscriptGuide
+        settings.guide = guide
         let operation = DocumentPrintView.operation(
             text: text,
             settings: settings,
@@ -49,6 +49,10 @@ struct DocumentPrintingTests {
     }
 
     private func firstPagePixels(printedBy operation: NSPrintOperation) throws -> [UInt8] {
+        try firstPageBitmap(printedBy: operation).pixels
+    }
+
+    private func firstPageBitmap(printedBy operation: NSPrintOperation) throws -> (pixels: [UInt8], width: Int) {
         let page = try #require(pdf(printedBy: operation).page(at: 0))
         let bounds = page.bounds(for: .mediaBox)
         let width = Int(bounds.width)
@@ -65,15 +69,15 @@ struct DocumentPrintingTests {
         context.fill(CGRect(origin: .zero, size: bounds.size))
         page.draw(with: .mediaBox, to: context)
         let data = try #require(context.data)
-        return Array(UnsafeRawBufferPointer(start: data, count: width * context.height))
+        return (Array(UnsafeRawBufferPointer(start: data, count: width * context.height)), width)
     }
 
     private func manuscriptBodyPixels(
         _ text: String,
         orientation: EditorSettings.Orientation
     ) throws -> [UInt8] {
-        try firstPagePixels(printedBy: operation(text, orientation: orientation, showsManuscriptGuide: true) {
-            $0.showsManuscriptGrid = false
+        try firstPagePixels(printedBy: operation(text, orientation: orientation, guide: .manuscriptPaper) {
+            $0.showsGuide = false
             $0.showsPageNumbers = false
         })
     }
@@ -143,7 +147,7 @@ struct DocumentPrintingTests {
             (wrapped, ManuscriptPaper.pages(forLines: ManuscriptPaper().count(in: wrapped as NSString))),
         ] {
             let printed = try pages(
-                printedBy: operation(text, orientation: orientation, showsManuscriptGuide: true)
+                printedBy: operation(text, orientation: orientation, guide: .manuscriptPaper)
             )
             #expect(printed.count == pageCount, "\(text.debugDescription)")
             #expect(printed.joined().count { $0 == "印" } == text.count { $0 == "印" })
@@ -152,11 +156,78 @@ struct DocumentPrintingTests {
 
     @Test
     func printsManuscriptGridOnlyWhenEnabled() throws {
-        let withGrid = try firstPagePixels(printedBy: operation("", orientation: .vertical, showsManuscriptGuide: true))
+        let withGrid = try firstPagePixels(printedBy: operation("", orientation: .vertical, guide: .manuscriptPaper))
         #expect(withGrid.count { $0 < 250 } > 1000)
 
         let withoutGrid = try manuscriptBodyPixels("", orientation: .vertical)
         #expect(withoutGrid.count { $0 < 250 } == 0)
+    }
+
+    /// 用紙の幅の半分を超えて線が続く位置を罫線、それ以外のインクのある位置を字として、行に直交する方向の座標で返す
+    private func ruledPage(
+        _ text: String,
+        orientation: EditorSettings.Orientation,
+        configure: (DocumentPrintView) -> Void = { _ in }
+    ) throws -> (rules: [Int], glyphs: [Int]) {
+        let bitmap = try firstPageBitmap(printedBy: operation(text, orientation: orientation, guide: .ruledLines) {
+            $0.showsPageNumbers = false
+            configure($0)
+        })
+        let height = bitmap.pixels.count / bitmap.width
+        let isVertical = orientation == .vertical
+        var ink = [Int](repeating: 0, count: isVertical ? bitmap.width : height)
+        for (index, pixel) in bitmap.pixels.enumerated() where pixel < 250 {
+            ink[isVertical ? index % bitmap.width : index / bitmap.width] += 1
+        }
+        let threshold = (isVertical ? height : bitmap.width) / 2
+        return (
+            ink.indices.filter { ink[$0] > threshold },
+            ink.indices.filter { ink[$0] > 0 && ink[$0] <= threshold }
+        )
+    }
+
+    private func bands(_ positions: [Int]) -> [ClosedRange<Int>] {
+        var bands: [ClosedRange<Int>] = []
+        for position in positions {
+            if let last = bands.last, last.upperBound + 1 == position {
+                bands[bands.count - 1] = last.lowerBound ... position
+            } else {
+                bands.append(position ... position)
+            }
+        }
+        return bands
+    }
+
+    /// 空行のあとの行も含めて、字のかたまりのあいだの罫線は、その空きに均等に並ぶ
+    @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical])
+    func printsRuledLinesHalfwayBetweenLines(orientation: EditorSettings.Orientation) throws {
+        let page = try ruledPage("あ\n\nあ\nあ", orientation: orientation)
+        let rules = bands(page.rules)
+        let glyphs = bands(page.glyphs)
+        try #require(glyphs.count == 3)
+        // 縦書きは右の列から読むので、空行のある空きは座標の大きいほうにくる
+        let gaps = zip(glyphs, glyphs.dropFirst()).map { $0.upperBound ... $1.lowerBound }
+        let counts = gaps.map { gap in rules.count { gap.contains($0.lowerBound) } }
+        #expect(counts == (orientation == .vertical ? [1, 2] : [2, 1]))
+        for gap in gaps {
+            let inside = rules.filter { gap.contains($0.lowerBound) }
+            let first = try #require(inside.first?.lowerBound)
+            let last = try #require(inside.last?.upperBound)
+            #expect(abs((first - gap.lowerBound) - (gap.upperBound - last)) <= 2, "\(gap): \(inside)")
+        }
+        #expect(rules.count > 10)
+    }
+
+    @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical], ["", "あ"])
+    func printsRuledLinesOnlyWhenEnabled(orientation: EditorSettings.Orientation, text: String) throws {
+        #expect(try ruledPage(text, orientation: orientation).rules.count > 10)
+        #expect(try ruledPage(text, orientation: orientation) { $0.showsGuide = false }.rules.isEmpty)
+    }
+
+    @Test
+    func printsNoLinesOnBlankPaper() throws {
+        let pixels = try firstPagePixels(printedBy: operation(""))
+        #expect(pixels.count { $0 < 250 } == 0)
     }
 
     /// 縦中横は回転させて描くので、位置を誤ると字が欠ける。横書きと同じ字形なので、同じくらいのインクになる

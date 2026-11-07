@@ -17,7 +17,7 @@ struct EditorSettingsTests {
     @Test
     func decidesManuscriptCellsFromReadableWidthAndWindow() {
         var settings = EditorSettings()
-        settings.showsManuscriptGuide = true
+        settings.guide = .manuscriptPaper
         settings.fontSize = 16
         #expect(settings.manuscriptCells(clipLength: 500, minimumLeading: 32, minimumTrailing: 32) == 27)
         #expect(settings.lineInsets(clipLength: 500, minimumLeading: 32, minimumTrailing: 32) == (32, 36))
@@ -33,7 +33,7 @@ struct EditorSettingsTests {
     @Test
     func keepsCrossInsetsWhileCellsFollowTheWindow() {
         var settings = EditorSettings()
-        settings.showsManuscriptGuide = true
+        settings.guide = .manuscriptPaper
         settings.fontSize = 16
         func expansion(_ clipLength: CGFloat) -> CGFloat {
             settings.crossInsetExpansion(clipLength: clipLength, minimumLeading: 32, minimumTrailing: 32)

@@ -110,7 +110,7 @@ struct ManuscriptPaperTests {
     @Test
     func showsPagesInStatusBar() async {
         var settings = EditorSettings()
-        settings.showsManuscriptGuide = true
+        settings.guide = .manuscriptPaper
         settings.usesReadableWidth = true
         settings.readableWidth = .japanese
         settings.statusBarItems = settings.statusBarItems.map {

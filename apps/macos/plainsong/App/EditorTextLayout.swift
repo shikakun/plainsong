@@ -57,6 +57,13 @@ final nonisolated class LineHeightSegmentLayoutManager: NSTextLayoutManager {
         (isEmpty ? bounds.maxY - lineHeight : bounds.minY) + line.glyphOrigin.y
     }
 
+    /// 字面の中心。カーソルの帯の中心と同じ位置になる
+    func textMiddle(of line: NSTextLineFragment, in bounds: CGRect) -> CGFloat {
+        let characters = line.attributedString.attributedSubstring(from: line.characterRange).string
+        return verticalMiddle(of: line, in: bounds, isEmpty: characters.allSatisfy(\.isNewline))
+            - (textContainer?.layoutOrientation == .vertical ? 0 : japaneseMiddle)
+    }
+
     override func enumerateTextSegments(
         in textRange: NSTextRange,
         type: NSTextLayoutManager.SegmentType,

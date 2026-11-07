@@ -35,7 +35,7 @@ struct ManuscriptGuideTests {
     ) async -> EditorWindowController {
         var settings = EditorSettings()
         settings.orientation = orientation
-        settings.showsManuscriptGuide = true
+        settings.guide = .manuscriptPaper
         settings.usesReadableWidth = true
         settings.readableWidth = .japaneseShort
         configure(&settings)
@@ -159,7 +159,7 @@ struct ManuscriptGuideTests {
         settings.highlightsMarkdown = true
         let editor = EditorWindowController(text: "**強調**と本文", settings: settings)
         await waitForTypesetting()
-        settings.showsManuscriptGuide = true
+        settings.guide = .manuscriptPaper
         editor.apply(settings)
         await waitForTypesetting()
         let storage = try #require(editor.textStorage)

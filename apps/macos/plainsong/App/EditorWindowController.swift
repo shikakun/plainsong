@@ -21,6 +21,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private var statusBar: StatusBar?
     private var lineNumberView: LineNumberView?
     var manuscriptGridView: ManuscriptGridView?
+    var ruledLinesView: RuledLinesView?
     var theme: Theme?
     /// 「デフォルト」とテーマにないキーは、NSTextViewが最初に持っている選択範囲の色に戻す
     private let standardSelectedTextAttributes: [NSAttributedString.Key: Any]
@@ -155,7 +156,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
             || settings.indentsParagraphs != previous?.indentsParagraphs
             || settings.paragraphIndent != previous?.paragraphIndent
             || settings.usesReadableWidth != previous?.usesReadableWidth
-            || settings.showsManuscriptGuide != previous?.showsManuscriptGuide
+            || settings.guide != previous?.guide
         if typesettingChanged {
             if let container = textView.textContainer as? ManuscriptTextContainer {
                 // マス数はウィンドウの大きさで決まるので、`updateInsets()`で渡す
@@ -178,6 +179,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         applyWhitespace(of: settings)
         applyLineNumbers(of: settings)
         applyManuscriptGrid(of: settings)
+        applyRuledLines(of: settings)
         observeClipViewFrame(
             settings.usesReadableWidth || settings.showsManuscriptGuide
                 || settings.showsLineNumbers || settings.orientation == .vertical
@@ -224,6 +226,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         textView.selectedTextAttributes = selectedTextAttributes
         statusBar?.backgroundColor = theme?.background
         manuscriptGridView?.color = theme?.foreground ?? .labelColor
+        ruledLinesView?.color = theme?.foreground ?? .labelColor
         whitespaceMarkers.color = theme?.foreground.map { $0.withAlphaComponent(0.3) } ?? .tertiaryLabelColor
         if whitespaceMarkers.scope != nil || whitespaceMarkers.showsNewlines {
             redrawText()
@@ -453,6 +456,7 @@ extension EditorWindowController {
         }
         setContentInsets(clipInsets)
         manuscriptGridView?.needsDisplay = true
+        ruledLinesView?.needsDisplay = true
         scrollView.scrollerInsets = NSEdgeInsets(top: 0, left: 0, bottom: statusBarHeight, right: 0)
     }
 

@@ -1,5 +1,19 @@
 import AppKit
 
+private enum PrintedGuideLine {
+    /// 線の座標の端数が線ごとに違うと、ビューアが画素に合わせるときに太さがばらついて見えるので、0.5pt単位に揃える
+    static func snapped(_ value: CGFloat) -> CGFloat {
+        (value * 2).rounded(.down) / 2
+    }
+
+    /// 画面の線の濃さ（文字色の18%）を白い紙の上で再現する
+    static func strokePath(in context: CGContext) {
+        context.setStrokeColor(NSColor(white: 0.82, alpha: 1).cgColor)
+        context.setLineWidth(0.5)
+        context.strokePath()
+    }
+}
+
 private struct ManuscriptPageGeometry {
     private static let columns = ManuscriptPaper.linesPerPage
     private static let fontRatio: CGFloat = 0.72
@@ -18,15 +32,10 @@ private struct ManuscriptPageGeometry {
         let columns = CGFloat(Self.columns)
         // ぶら下げる句読点の分を、行の方向に1マス空ける
         let cellsPerLine = CGFloat(ManuscriptPaper.standardCellsPerLine + 1)
-        cell = Self.snapped(min(lineLength / cellsPerLine, crossLength / (columns * Self.pitchRatio)))
-        pitch = Self.snapped(cell * Self.pitchRatio)
-        lineStart = Self.snapped((lineLength - cellsPerLine * cell) / 2)
-        columnStart = Self.snapped((crossLength - columns * pitch) / 2)
-    }
-
-    /// 線の座標の端数が線ごとに違うと、ビューアが画素に合わせるときに太さがばらついて見えるので、0.5pt単位に揃える
-    private static func snapped(_ value: CGFloat) -> CGFloat {
-        (value * 2).rounded(.down) / 2
+        cell = PrintedGuideLine.snapped(min(lineLength / cellsPerLine, crossLength / (columns * Self.pitchRatio)))
+        pitch = PrintedGuideLine.snapped(cell * Self.pitchRatio)
+        lineStart = PrintedGuideLine.snapped((lineLength - cellsPerLine * cell) / 2)
+        columnStart = PrintedGuideLine.snapped((crossLength - columns * pitch) / 2)
     }
 
     func middle(ofColumn column: Int) -> CGFloat {
@@ -50,10 +59,7 @@ private struct ManuscriptPageGeometry {
                 context.addLine(to: CGPoint(x: position, y: middle + half))
             }
         }
-        // 画面のマス目の濃さ（文字色の18%）を白い紙の上で再現する
-        context.setStrokeColor(NSColor(white: 0.82, alpha: 1).cgColor)
-        context.setLineWidth(0.5)
-        context.strokePath()
+        PrintedGuideLine.strokePath(in: context)
     }
 }
 
@@ -72,7 +78,7 @@ final class DocumentPrintView: NSView {
     }
 
     private let textView: NSTextView
-    private let layoutManager: NSTextLayoutManager
+    private let layoutManager: LineHeightSegmentLayoutManager
     /// レイアウトマネージャーはデリゲートを弱参照で持つので、ここで持っておく
     private let fragments = WhitespaceMarkers()
     private let settings: EditorSettings
@@ -84,10 +90,14 @@ final class DocumentPrintView: NSView {
     private var japaneseMiddle: CGFloat = 0
 
     var showsPageNumbers: Bool
-    var showsManuscriptGrid = true
+    var showsGuide = true
 
-    var isManuscript: Bool {
-        settings.showsManuscriptGuide
+    var guideOptionTitle: String? {
+        switch settings.guide {
+        case .blank: nil
+        case .ruledLines: String(localized: "print.showsRuledLines")
+        case .manuscriptPaper: String(localized: "print.showsManuscriptGrid")
+        }
     }
 
     private var isVertical: Bool {
@@ -167,10 +177,12 @@ final class DocumentPrintView: NSView {
 
     private func typesetDocument() {
         layoutManager.usesFontLeading = !isVertical
-        setBodyText(
-            font: settings.fontFamily.font(ofSize: settings.fontSize),
-            paragraphStyle: settings.paragraphStyle(lineHeight: EditorWindowController.lineHeight(of: settings))
-        )
+        let font = settings.fontFamily.font(ofSize: settings.fontSize)
+        let lineHeight = EditorWindowController.lineHeight(of: settings)
+        let japanese = EditorSettings.japaneseFont(for: font)
+        layoutManager.lineHeight = lineHeight
+        layoutManager.japaneseMiddle = (japanese.ascender + japanese.descender) / 2
+        setBodyText(font: font, paragraphStyle: settings.paragraphStyle(lineHeight: lineHeight))
         JapaneseTypesetter(textView: textView).update(usesKerning: settings.usesKerning, isVertical: isVertical)
 
         let lineLength = isVertical ? pageSize.height : pageSize.width
@@ -254,7 +266,35 @@ final class DocumentPrintView: NSView {
         }
     }
 
+    private func drawRuledLines(on page: Page, in context: CGContext) {
+        var middles = page.lines.map { placed in
+            layoutManager.textMiddle(
+                of: placed.line,
+                in: placed.line.typographicBounds.offsetBy(dx: placed.fragmentOrigin.x, dy: placed.fragmentOrigin.y)
+            ) - page.start
+        }
+        if middles.isEmpty, let first = layoutManager.firstLineMiddle {
+            middles = [first]
+        }
+        let positions = RuledLines.positions(
+            betweenLinesAt: middles,
+            pitch: EditorWindowController.lineHeight(of: settings) * settings.lineSpacing.multiplier,
+            continues: true,
+            in: 0 ... (isVertical ? pageSize.width : pageSize.height)
+        )
+        let lineLength = isVertical ? pageSize.height : pageSize.width
+        for position in positions {
+            let edge = PrintedGuideLine.snapped(position)
+            context.move(to: CGPoint(x: 0, y: edge))
+            context.addLine(to: CGPoint(x: lineLength, y: edge))
+        }
+        PrintedGuideLine.strokePath(in: context)
+    }
+
     private func drawDocumentPage(_ page: Page, in context: CGContext) {
+        if settings.guide == .ruledLines, showsGuide {
+            drawRuledLines(on: page, in: context)
+        }
         for placed in page.lines {
             draw(
                 placed,
@@ -269,7 +309,7 @@ final class DocumentPrintView: NSView {
         geometry: ManuscriptPageGeometry,
         in context: CGContext
     ) {
-        if showsManuscriptGrid {
+        if showsGuide {
             geometry.drawGrid(in: context)
         }
         for (column, line) in lines.enumerated() {
@@ -349,14 +389,14 @@ private final class PrintOptionsController: NSViewController, NSPrintPanelAccess
         didSet { printView.showsPageNumbers = showsPageNumbers }
     }
 
-    @objc private dynamic var showsManuscriptGrid: Bool {
-        didSet { printView.showsManuscriptGrid = showsManuscriptGrid }
+    @objc private dynamic var showsGuide: Bool {
+        didSet { printView.showsGuide = showsGuide }
     }
 
     init(view: DocumentPrintView) {
         printView = view
         showsPageNumbers = view.showsPageNumbers
-        showsManuscriptGrid = view.showsManuscriptGrid
+        showsGuide = view.showsGuide
         super.init(nibName: nil, bundle: nil)
         title = "Plainsong"
     }
@@ -378,12 +418,8 @@ private final class PrintOptionsController: NSViewController, NSPrintPanelAccess
             isOn: showsPageNumbers,
             action: #selector(changeShowsPageNumbers(_:))
         )]
-        if printView.isManuscript {
-            checkboxes.insert(checkbox(
-                String(localized: "print.showsManuscriptGrid"),
-                isOn: showsManuscriptGrid,
-                action: #selector(changeShowsManuscriptGrid(_:))
-            ), at: 0)
+        if let title = printView.guideOptionTitle {
+            checkboxes.insert(checkbox(title, isOn: showsGuide, action: #selector(changeShowsGuide(_:))), at: 0)
         }
         let stack = NSStackView(views: checkboxes)
         stack.orientation = .vertical
@@ -398,8 +434,8 @@ private final class PrintOptionsController: NSViewController, NSPrintPanelAccess
         showsPageNumbers = sender.state == .on
     }
 
-    @objc private func changeShowsManuscriptGrid(_ sender: NSButton) {
-        showsManuscriptGrid = sender.state == .on
+    @objc private func changeShowsGuide(_ sender: NSButton) {
+        showsGuide = sender.state == .on
     }
 
     private func summary(_ title: String, isOn: Bool) -> [NSPrintPanel.AccessorySummaryKey: String] {
@@ -413,11 +449,11 @@ private final class PrintOptionsController: NSViewController, NSPrintPanelAccess
 
     func localizedSummaryItems() -> [[NSPrintPanel.AccessorySummaryKey: String]] {
         let pageNumbers = summary(String(localized: "print.showsPageNumbers"), isOn: showsPageNumbers)
-        guard printView.isManuscript else { return [pageNumbers] }
-        return [summary(String(localized: "print.showsManuscriptGrid"), isOn: showsManuscriptGrid), pageNumbers]
+        guard let title = printView.guideOptionTitle else { return [pageNumbers] }
+        return [summary(title, isOn: showsGuide), pageNumbers]
     }
 
     func keyPathsForValuesAffectingPreview() -> Set<String> {
-        ["showsPageNumbers", "showsManuscriptGrid"]
+        ["showsPageNumbers", "showsGuide"]
     }
 }
