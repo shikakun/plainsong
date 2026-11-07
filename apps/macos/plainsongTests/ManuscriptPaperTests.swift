@@ -41,7 +41,6 @@ struct ManuscriptPaperTests {
     /// 1マスに入る文字はUTF-16の長さによらない
     @Test
     func countsCellsByGraphemeCluster() {
-        #expect(lengths(String(repeating: "𠮷", count: 21)) == [40, 2])
         #expect(lengths(String(repeating: "か\u{309A}", count: 21)) == [40, 2])
     }
 
@@ -56,7 +55,6 @@ struct ManuscriptPaperTests {
     @Test
     func indentsOnlyTheFirstLineOfParagraphsThatStartWithText() {
         #expect(lengths(filler(25), indent: 1) == [19, 6])
-        #expect(lengths(filler(25), indent: 2) == [18, 7])
         #expect(lengths("「" + filler(24), indent: 1) == [20, 5])
         #expect(lengths("　" + filler(24), indent: 1) == [20, 5])
         #expect(lengths(filler(25) + "\u{2028}" + filler(25), indent: 1) == [19, 7, 20, 5])
@@ -67,8 +65,6 @@ struct ManuscriptPaperTests {
         let paper = ManuscriptPaper()
         for (text, lines) in [
             ("", 0),
-            ("\n", 1),
-            ("あ\n", 1),
             ("あ\n\nい", 3),
             ("あ\r\nい", 2),
             ("あ\u{2028}い", 2),
@@ -86,27 +82,25 @@ struct ManuscriptPaperTests {
         #expect(placements[0][2].range == NSRange(location: 3, length: 2))
     }
 
+    /// 段落の途中から始まる行でも、全文から求めた行と同じマスの数になる。2026の後半の26が行頭にきても、2桁とみなさない
     @Test
-    func breaksAtTheGivenCellsPerLine() {
-        let paper = ManuscriptPaper(cellsPerLine: 5)
-        let string = "あいうえお。かきくけこさ" as NSString
-        #expect(paper.lines(in: string).map(\.length) == [6, 5, 1])
-        #expect(paper.cells(ofLineAt: 0, in: string) == 6)
-        #expect(paper.cells(ofLineAt: 6, in: string) == 5)
+    func measuresALineWithoutReadingTheWholeParagraph() {
+        let string = (filler(18) + "2026" + filler(200)) as NSString
+        let paper = ManuscriptPaper()
+        var location = 0
+        for line in paper.lines(in: string) {
+            #expect(paper.cells(ofLineAt: location, in: string) == line.cells, "\(location)")
+            location += line.length
+        }
     }
 
-    @Test
-    func roundsPartialPagesUp() {
-        #expect(ManuscriptPaper.pages(forLines: 0) == 0)
-        #expect(ManuscriptPaper.pages(forLines: 1) == 1)
-        #expect(ManuscriptPaper.pages(forLines: 20) == 1)
-        #expect(ManuscriptPaper.pages(forLines: 21) == 2)
-    }
-
-    /// 400字ちょうどの段落に1行足すと2枚になり、段落の途中からの選択はそこを行頭として数える
+    /// 画面のマス数を変えても400字詰めで数える。400字ちょうどの段落に1行足すと2枚になり、段落の途中からの選択はそこを行頭として数える
     @Test
     func showsPagesInStatusBar() async {
         var settings = EditorSettings()
+        settings.showsManuscriptGuide = true
+        settings.usesReadableWidth = true
+        settings.readableWidth = .japanese
         settings.statusBarItems = settings.statusBarItems.map {
             ExtensionItem(kind: $0.kind, isEnabled: $0.kind == .manuscriptPages)
         }

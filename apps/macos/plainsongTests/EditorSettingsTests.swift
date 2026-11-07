@@ -14,7 +14,6 @@ struct EditorSettingsTests {
         #expect(settings.crossInsetExpansion(trailing: insets.trailing, minimumTrailing: 40) == 64)
     }
 
-    /// 読みやすい幅はマス数の上限で、ウィンドウに入らないときはマスを減らす。余りは行末の余白にする
     @Test
     func decidesManuscriptCellsFromReadableWidthAndWindow() {
         var settings = EditorSettings()
