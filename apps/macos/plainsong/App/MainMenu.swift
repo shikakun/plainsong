@@ -78,6 +78,8 @@ enum MainMenu {
             item("menu.saveAs", #selector(NSDocument.saveAs(_:)), key: "s"),
             item("menu.rename", #selector(NSDocument.rename(_:))),
             item("menu.moveTo", #selector(NSDocument.move(_:))),
+            .separator(),
+            item("menu.print", #selector(NSDocument.printDocument(_:)), key: "p"),
         ])
     }
 

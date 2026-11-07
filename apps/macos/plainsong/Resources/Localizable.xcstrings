@@ -992,6 +992,22 @@
         }
       }
     },
+    "menu.print" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Print…"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プリント…"
+          }
+        }
+      }
+    },
     "menu.quit" : {
       "localizations" : {
         "en" : {
@@ -1180,6 +1196,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "拡大/縮小"
+          }
+        }
+      }
+    },
+    "print.showsPageNumbers" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Print Page Numbers"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ページ番号を印刷"
+          }
+        }
+      }
+    },
+    "print.showsPageNumbers.off" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オフ"
+          }
+        }
+      }
+    },
+    "print.showsPageNumbers.on" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "オン"
           }
         }
       }

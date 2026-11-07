@@ -62,6 +62,14 @@ final class TextDocument: NSDocument {
         }
     }
 
+    override func printOperation(
+        withSettings printSettings: [NSPrintInfo.AttributeKey: Any]
+    ) throws -> NSPrintOperation {
+        let info = printInfo.copy() as? NSPrintInfo ?? printInfo
+        info.dictionary().addEntries(from: printSettings)
+        return DocumentPrintView.operation(text: text, settings: .load(), printInfo: info)
+    }
+
     private func openDraft(_ id: String) {
         let store = DraftLibrary.app.store(for: id)
         pendingText = store.restore()

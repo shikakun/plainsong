@@ -177,9 +177,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     /// 本文全体を1回の編集で書き換える。属性の変更なので、TextStoreは記録せず、取り消しの履歴にも入らない
     private func applyFont(of settings: EditorSettings) {
         let font = settings.fontFamily.font(ofSize: settings.fontSize)
-        // 明朝体の欧文は文字サイズによって行の高さが1ptずれるので、フォントを切り替えても行送りが変わらないようゴシック体の高さに揃える
-        let sansSerif = EditorSettings.FontFamily.sansSerif.font(ofSize: settings.fontSize)
-        let lineHeight = Self.metrics.defaultLineHeight(for: sansSerif)
+        let lineHeight = Self.lineHeight(of: settings)
         let paragraphStyle = settings.paragraphStyle(lineHeight: lineHeight)
         layoutManager.lineHeight = lineHeight
         let japanese = CTFontCreateForString(font, "あ" as CFString, CFRange(location: 0, length: 1)) as NSFont
@@ -320,25 +318,6 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         return statusBar
     }
 
-    /// TextKit 2が組む、行間を含まない1行の高さを求める
-    private static let metrics = NSLayoutManager()
-
-    /// scrollableTextView()ではレイアウトマネージャーを差し替えられないので、同じ構成を自分で組む
-    private static func makeTextView() -> (NSTextView, LineHeightSegmentLayoutManager) {
-        let layoutManager = LineHeightSegmentLayoutManager()
-        let contentStorage = TrailingNewlineContentStorage()
-        contentStorage.addTextLayoutManager(layoutManager)
-        contentStorage.delegate = ParagraphIndentRules.shared
-        let container = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
-        container.widthTracksTextView = true
-        layoutManager.textContainer = container
-        let textView = NSTextView(frame: .zero, textContainer: container)
-        textView.autoresizingMask = [.width, .height]
-        textView.isVerticallyResizable = true
-        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        return (textView, layoutManager)
-    }
-
     private static func configure(_ textView: NSTextView) {
         textView.isRichText = false
         textView.importsGraphics = false
@@ -362,6 +341,30 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
 }
 
 extension EditorWindowController {
+    /// TextKit 2が組む、行間を含まない1行の高さを求める
+    private static let metrics = NSLayoutManager()
+
+    /// 明朝体の欧文は文字サイズによって行の高さが1ptずれるので、フォントを切り替えても行送りが変わらないようゴシック体の高さに揃える
+    static func lineHeight(of settings: EditorSettings) -> CGFloat {
+        metrics.defaultLineHeight(for: EditorSettings.FontFamily.sansSerif.font(ofSize: settings.fontSize))
+    }
+
+    /// scrollableTextView()ではレイアウトマネージャーを差し替えられないので、同じ構成を自分で組む
+    static func makeTextView() -> (NSTextView, LineHeightSegmentLayoutManager) {
+        let layoutManager = LineHeightSegmentLayoutManager()
+        let contentStorage = TrailingNewlineContentStorage()
+        contentStorage.addTextLayoutManager(layoutManager)
+        contentStorage.delegate = ParagraphIndentRules.shared
+        let container = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
+        container.widthTracksTextView = true
+        layoutManager.textContainer = container
+        let textView = NSTextView(frame: .zero, textContainer: container)
+        textView.autoresizingMask = [.width, .height]
+        textView.isVerticallyResizable = true
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        return (textView, layoutManager)
+    }
+
     private func titlebarDidChange() {
         guard measureTitlebar() else { return }
         updateInsets()

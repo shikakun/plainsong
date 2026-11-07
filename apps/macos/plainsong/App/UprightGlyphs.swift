@@ -95,7 +95,17 @@ nonisolated enum UprightGlyphs {
             drawText()
             return
         }
-        let cells = tateChuYokoCells(of: fragment, paragraph: paragraph, at: point)
+        draw(fragment.textLineFragments, of: paragraph, at: point, in: context, drawText: drawText)
+    }
+
+    static func draw(
+        _ lines: [NSTextLineFragment],
+        of paragraph: NSAttributedString,
+        at point: CGPoint,
+        in context: CGContext,
+        drawText: () -> Void
+    ) {
+        let cells = tateChuYokoCells(of: lines, paragraph: paragraph, at: point)
         guard !cells.isEmpty else {
             drawText()
             return
@@ -121,12 +131,12 @@ nonisolated enum UprightGlyphs {
     }
 
     private static func tateChuYokoCells(
-        of fragment: NSTextLayoutFragment,
+        of lines: [NSTextLineFragment],
         paragraph: NSAttributedString,
         at point: CGPoint
     ) -> [Cell] {
         var cells: [Cell] = []
-        for line in fragment.textLineFragments {
+        for line in lines {
             let bounds = line.typographicBounds.offsetBy(dx: point.x, dy: point.y)
             // 縦書きでは、行の中心がglyphOriginの高さにくる
             let center = bounds.minY + line.glyphOrigin.y
