@@ -1,5 +1,69 @@
 import AppKit
 
+/// 原稿用紙の1ページの中の位置。行の方向の長さと、列を並べる方向の長さから求める
+private struct ManuscriptPageGeometry {
+    private static let columns = ManuscriptPaper.linesPerPage
+    /// マスの大きさに対する、文字の大きさと行送り
+    private static let fontRatio: CGFloat = 0.72
+    private static let pitchRatio: CGFloat = 1.4
+
+    let cell: CGFloat
+    let lineStart: CGFloat
+    private let columnStart: CGFloat
+    private let pitch: CGFloat
+
+    var fontSize: CGFloat {
+        cell * Self.fontRatio
+    }
+
+    /// 文字の空きを行の方向に分けて、文字がマスの中央にくるようにする
+    var tracking: CGFloat {
+        cell - fontSize
+    }
+
+    init(lineLength: CGFloat, crossLength: CGFloat) {
+        let columns = CGFloat(Self.columns)
+        // ぶら下げる句読点の分を、行の方向に1マス空ける
+        let cellsPerLine = CGFloat(ManuscriptPaper.cellsPerLine + 1)
+        cell = Self.snapped(min(lineLength / cellsPerLine, crossLength / (columns * Self.pitchRatio)))
+        pitch = Self.snapped(cell * Self.pitchRatio)
+        lineStart = Self.snapped((lineLength - cellsPerLine * cell) / 2)
+        columnStart = Self.snapped((crossLength - columns * pitch) / 2)
+    }
+
+    /// 線の座標の端数が線ごとに違うと、ビューアが画素に合わせるときに太さがばらついて見えるので、0.5pt単位に揃える
+    private static func snapped(_ value: CGFloat) -> CGFloat {
+        (value * 2).rounded(.down) / 2
+    }
+
+    func middle(ofColumn column: Int) -> CGFloat {
+        columnStart + (CGFloat(column) + 0.5) * pitch
+    }
+
+    /// 線を別々に引くと角が欠けるので、列の外枠を閉じた長方形にする
+    func drawGrid(in context: CGContext) {
+        let half = cell / 2
+        for column in 0 ..< Self.columns {
+            let middle = middle(ofColumn: column)
+            context.addRect(CGRect(
+                x: lineStart,
+                y: middle - half,
+                width: CGFloat(ManuscriptPaper.cellsPerLine) * cell,
+                height: cell
+            ))
+            for index in 1 ..< ManuscriptPaper.cellsPerLine {
+                let position = lineStart + CGFloat(index) * cell
+                context.move(to: CGPoint(x: position, y: middle - half))
+                context.addLine(to: CGPoint(x: position, y: middle + half))
+            }
+        }
+        // 画面のマス目の濃さ（文字色の18%）を白い紙の上で再現する
+        context.setStrokeColor(NSColor(white: 0.82, alpha: 1).cgColor)
+        context.setLineWidth(0.5)
+        context.strokePath()
+    }
+}
+
 /// 画面のビューを印刷すると、ウィンドウの幅で組まれ、テーマの色や行番号まで写るので、本文だけを用紙に合わせて組み直す
 final class DocumentPrintView: NSView {
     private struct PlacedLine {
@@ -18,11 +82,24 @@ final class DocumentPrintView: NSView {
     private let layoutManager: NSTextLayoutManager
     /// レイアウトマネージャーはデリゲートを弱参照で持つので、ここで持っておく
     private let fragments = WhitespaceMarkers()
-    private let isVertical: Bool
+    private let settings: EditorSettings
+    private let text: String
     private var pageSize = NSSize.zero
     private var pages: [Page] = []
+    private var manuscriptGeometry: ManuscriptPageGeometry?
+    /// 横書きで行の中心にくる、和文の字面の中心の、ベースラインからの高さ
+    private var japaneseMiddle: CGFloat = 0
 
-    var showsPageNumbers = false
+    var showsPageNumbers: Bool
+    var showsManuscriptGrid = true
+
+    var isManuscript: Bool {
+        settings.showsManuscriptGuide
+    }
+
+    private var isVertical: Bool {
+        settings.orientation == .vertical
+    }
 
     override var isFlipped: Bool {
         true
@@ -32,21 +109,15 @@ final class DocumentPrintView: NSView {
         let (textView, layoutManager) = EditorWindowController.makeTextView()
         self.textView = textView
         self.layoutManager = layoutManager
-        isVertical = settings.orientation == .vertical
+        self.settings = settings
+        self.text = text
+        showsPageNumbers = settings.showsManuscriptGuide
         super.init(frame: .zero)
 
         layoutManager.delegate = fragments
-        layoutManager.usesFontLeading = !isVertical
         textView.textContainer?.lineFragmentPadding = 0
         textView.textContainer?.widthTracksTextView = false
         textView.setLayoutOrientation(settings.orientation.layoutOrientation)
-        let lineHeight = EditorWindowController.lineHeight(of: settings)
-        textView.textStorage?.setAttributedString(NSAttributedString(string: text, attributes: [
-            .font: settings.fontFamily.font(ofSize: settings.fontSize),
-            .paragraphStyle: settings.paragraphStyle(lineHeight: lineHeight),
-            .foregroundColor: NSColor.black,
-        ]))
-        JapaneseTypesetter(textView: textView).update(usesKerning: settings.usesKerning, isVertical: isVertical)
     }
 
     @available(*, unavailable)
@@ -82,27 +153,105 @@ final class DocumentPrintView: NSView {
     }
 
     private func typeset() {
+        if settings.showsManuscriptGuide {
+            typesetManuscript()
+        } else {
+            typesetDocument()
+        }
+    }
+
+    private func setBodyText(font: NSFont, paragraphStyle: NSParagraphStyle) {
+        textView.textStorage?.setAttributedString(NSAttributedString(string: text, attributes: [
+            .font: font,
+            .paragraphStyle: paragraphStyle,
+            .foregroundColor: NSColor.black,
+        ]))
+    }
+
+    private func typesetDocument() {
+        layoutManager.usesFontLeading = !isVertical
+        setBodyText(
+            font: settings.fontFamily.font(ofSize: settings.fontSize),
+            paragraphStyle: settings.paragraphStyle(lineHeight: EditorWindowController.lineHeight(of: settings))
+        )
+        JapaneseTypesetter(textView: textView).update(usesKerning: settings.usesKerning, isVertical: isVertical)
+
         let lineLength = isVertical ? pageSize.height : pageSize.width
         let pageExtent = isVertical ? pageSize.width : pageSize.height
         textView.textContainer?.size = NSSize(width: lineLength, height: CGFloat.greatestFiniteMagnitude)
 
         var page = Page(start: 0, lines: [])
         var pages: [Page] = []
-        layoutManager.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
-            guard let paragraph = (fragment.textElement as? NSTextParagraph)?.attributedString else { return true }
-            let origin = fragment.layoutFragmentFrame.origin
-            for line in fragment.textLineFragments {
-                let bounds = line.typographicBounds.offsetBy(dx: origin.x, dy: origin.y)
-                if bounds.maxY - page.start > pageExtent, !page.lines.isEmpty {
-                    pages.append(page)
-                    page = Page(start: bounds.minY, lines: [])
-                }
-                page.lines.append(PlacedLine(line: line, fragmentOrigin: origin, paragraph: paragraph))
+        for placed in placedLines() {
+            let bounds = placed.line.typographicBounds.offsetBy(
+                dx: placed.fragmentOrigin.x,
+                dy: placed.fragmentOrigin.y
+            )
+            if bounds.maxY - page.start > pageExtent, !page.lines.isEmpty {
+                pages.append(page)
+                page = Page(start: bounds.minY, lines: [])
             }
-            return true
+            page.lines.append(placed)
         }
         pages.append(page)
         self.pages = pages
+    }
+
+    /// 行の位置は組むときの位置によらずマスで決めるので、行間は組み方に影響しない
+    private func typesetManuscript() {
+        let geometry = ManuscriptPageGeometry(
+            lineLength: isVertical ? pageSize.height : pageSize.width,
+            crossLength: isVertical ? pageSize.width : pageSize.height
+        )
+        manuscriptGeometry = geometry
+        var cellSettings = settings
+        cellSettings.fontSize = geometry.cell
+        var fontSettings = settings
+        fontSettings.fontSize = geometry.fontSize
+        let body = settings.fontFamily.font(ofSize: geometry.fontSize)
+        let font = CTFontCreateForString(body, "あ" as CFString, CFRange(location: 0, length: 1)) as NSFont
+        japaneseMiddle = (font.ascender + font.descender) / 2
+
+        layoutManager.usesFontLeading = false
+        (textView.textContainer as? ManuscriptTextContainer)?.paper = settings.manuscriptPaper
+        (textView.textContainer as? ManuscriptTextContainer)?.cellWidth = geometry.cell
+        textView.textContainer?.size = NSSize(
+            width: geometry.cell * CGFloat(ManuscriptPaper.cellsPerLine),
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        setBodyText(
+            font: font,
+            // 字下げとタブはマスを単位にする
+            paragraphStyle: cellSettings.paragraphStyle(
+                lineHeight: EditorWindowController.lineHeight(of: fontSettings)
+            )
+        )
+        JapaneseTypesetter(textView: textView).update(
+            usesKerning: false,
+            isVertical: isVertical,
+            isManuscript: true,
+            tracking: geometry.tracking
+        )
+
+        // TextKitは末尾の改行のあとにも空の行を組むが、枚数には数えないので、印刷でも枚数と揃える
+        let lineCount = settings.manuscriptPaper.count(in: text as NSString)
+        let lines = Array(placedLines().prefix(lineCount))
+        pages = stride(from: 0, to: max(lines.count, 1), by: ManuscriptPaper.linesPerPage).map { start in
+            Page(start: 0, lines: Array(lines[start ..< min(start + ManuscriptPaper.linesPerPage, lines.count)]))
+        }
+    }
+
+    private func placedLines() -> [PlacedLine] {
+        var lines: [PlacedLine] = []
+        layoutManager.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
+            guard let paragraph = (fragment.textElement as? NSTextParagraph)?.attributedString else { return true }
+            let origin = fragment.layoutFragmentFrame.origin
+            lines += fragment.textLineFragments.map {
+                PlacedLine(line: $0, fragmentOrigin: origin, paragraph: paragraph)
+            }
+            return true
+        }
+        return lines
     }
 
     override func rectForPage(_ page: Int) -> NSRect {
@@ -116,21 +265,51 @@ final class DocumentPrintView: NSView {
             context.translateBy(x: 0, y: rectForPage(index + 1).minY)
             if isVertical {
                 // 組むときの下が列の左、右が文字の進む下になる
-                context.translateBy(x: pageSize.width + page.start, y: 0)
+                context.translateBy(x: pageSize.width, y: 0)
                 context.rotate(by: .pi / 2)
-            } else {
-                context.translateBy(x: 0, y: -page.start)
             }
-            for placed in page.lines {
-                UprightGlyphs.draw([placed.line], of: placed.paragraph, at: placed.fragmentOrigin, in: context) {
-                    let origin = placed.line.typographicBounds.origin
-                    placed.line.draw(
-                        at: CGPoint(x: placed.fragmentOrigin.x + origin.x, y: placed.fragmentOrigin.y + origin.y),
-                        in: context
-                    )
-                }
+            if let manuscriptGeometry {
+                drawManuscriptPage(page, geometry: manuscriptGeometry, in: context)
+            } else {
+                drawDocumentPage(page, in: context)
             }
             context.restoreGState()
+        }
+    }
+
+    private func drawDocumentPage(_ page: Page, in context: CGContext) {
+        for placed in page.lines {
+            draw(
+                placed,
+                at: CGPoint(x: placed.fragmentOrigin.x, y: placed.fragmentOrigin.y - page.start),
+                in: context
+            )
+        }
+    }
+
+    private func drawManuscriptPage(_ page: Page, geometry: ManuscriptPageGeometry, in context: CGContext) {
+        if showsManuscriptGrid {
+            geometry.drawGrid(in: context)
+        }
+        for (column, placed) in page.lines.enumerated() {
+            // 縦書きでは行の中心がglyphOriginの高さに、横書きでは和文の字面の中心がその上にくる
+            let bounds = placed.line.typographicBounds
+            let middle = geometry.middle(ofColumn: column) + (isVertical ? 0 : japaneseMiddle)
+            draw(
+                placed,
+                at: CGPoint(
+                    x: geometry.lineStart + placed.fragmentOrigin.x + geometry.tracking / 2,
+                    y: middle - bounds.minY - placed.line.glyphOrigin.y
+                ),
+                in: context
+            )
+        }
+    }
+
+    private func draw(_ placed: PlacedLine, at point: CGPoint, in context: CGContext) {
+        UprightGlyphs.draw([placed.line], of: placed.paragraph, at: point, in: context, drawsOnlyDigits: true) {
+            let origin = placed.line.typographicBounds.origin
+            placed.line.draw(at: CGPoint(x: point.x + origin.x, y: point.y + origin.y), in: context)
         }
     }
 
@@ -159,12 +338,18 @@ private final class PrintOptionsController: NSViewController, NSPrintPanelAccess
     private let printView: DocumentPrintView
 
     /// プリントパネルがプレビューを更新するために監視する
-    @objc private dynamic var showsPageNumbers = false {
+    @objc private dynamic var showsPageNumbers: Bool {
         didSet { printView.showsPageNumbers = showsPageNumbers }
+    }
+
+    @objc private dynamic var showsManuscriptGrid: Bool {
+        didSet { printView.showsManuscriptGrid = showsManuscriptGrid }
     }
 
     init(view: DocumentPrintView) {
         printView = view
+        showsPageNumbers = view.showsPageNumbers
+        showsManuscriptGrid = view.showsManuscriptGrid
         super.init(nibName: nil, bundle: nil)
         title = "Plainsong"
     }
@@ -174,41 +359,58 @@ private final class PrintOptionsController: NSViewController, NSPrintPanelAccess
         preconditionFailure("init(coder:) is not supported")
     }
 
+    private func checkbox(_ title: String, isOn: Bool, action: Selector) -> NSButton {
+        let checkbox = NSButton(checkboxWithTitle: title, target: self, action: action)
+        checkbox.state = isOn ? .on : .off
+        return checkbox
+    }
+
     override func loadView() {
-        let checkbox = NSButton(
-            checkboxWithTitle: String(localized: "print.showsPageNumbers"),
-            target: self,
+        var checkboxes = [checkbox(
+            String(localized: "print.showsPageNumbers"),
+            isOn: showsPageNumbers,
             action: #selector(changeShowsPageNumbers(_:))
-        )
-        checkbox.state = showsPageNumbers ? .on : .off
-        checkbox.translatesAutoresizingMaskIntoConstraints = false
-        let container = NSView()
-        container.addSubview(checkbox)
-        NSLayoutConstraint.activate([
-            checkbox.topAnchor.constraint(equalTo: container.topAnchor, constant: 8),
-            checkbox.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -8),
-            checkbox.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 20),
-            checkbox.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -20),
-        ])
+        )]
+        if printView.isManuscript {
+            checkboxes.insert(checkbox(
+                String(localized: "print.showsManuscriptGrid"),
+                isOn: showsManuscriptGrid,
+                action: #selector(changeShowsManuscriptGrid(_:))
+            ), at: 0)
+        }
+        let stack = NSStackView(views: checkboxes)
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.edgeInsets = NSEdgeInsets(top: 8, left: 20, bottom: 8, right: 20)
         // プリントパネルはAuto Layoutではなくframeで大きさを決める
-        container.frame.size = container.fittingSize
-        view = container
+        stack.frame.size = stack.fittingSize
+        view = stack
     }
 
     @objc private func changeShowsPageNumbers(_ sender: NSButton) {
         showsPageNumbers = sender.state == .on
     }
 
-    func localizedSummaryItems() -> [[NSPrintPanel.AccessorySummaryKey: String]] {
-        [[
-            .itemName: String(localized: "print.showsPageNumbers"),
-            .itemDescription: showsPageNumbers
+    @objc private func changeShowsManuscriptGrid(_ sender: NSButton) {
+        showsManuscriptGrid = sender.state == .on
+    }
+
+    private func summary(_ title: String, isOn: Bool) -> [NSPrintPanel.AccessorySummaryKey: String] {
+        [
+            .itemName: title,
+            .itemDescription: isOn
                 ? String(localized: "print.showsPageNumbers.on")
                 : String(localized: "print.showsPageNumbers.off"),
-        ]]
+        ]
+    }
+
+    func localizedSummaryItems() -> [[NSPrintPanel.AccessorySummaryKey: String]] {
+        let pageNumbers = summary(String(localized: "print.showsPageNumbers"), isOn: showsPageNumbers)
+        guard printView.isManuscript else { return [pageNumbers] }
+        return [summary(String(localized: "print.showsManuscriptGrid"), isOn: showsManuscriptGrid), pageNumbers]
     }
 
     func keyPathsForValuesAffectingPreview() -> Set<String> {
-        ["showsPageNumbers"]
+        ["showsPageNumbers", "showsManuscriptGrid"]
     }
 }

@@ -5,6 +5,7 @@ final class JapaneseTypesetter {
     private var usesKerning = false
     private var isVertical = false
     private var isManuscript = false
+    private var tracking: CGFloat = 0
     private var replacements: [UprightGlyphs.Kind: [NSFont: NSFont]] = [:]
 
     init(textView: NSTextView) {
@@ -13,13 +14,15 @@ final class JapaneseTypesetter {
 
     /// 0を指定すると、欧文のカーニングに加えて、和文の約物の詰めと和欧間の空きも止まる
     private var baseKern: NSNumber? {
-        usesKerning ? nil : 0
+        usesKerning ? nil : tracking as NSNumber
     }
 
-    func update(usesKerning: Bool, isVertical: Bool, isManuscript: Bool = false) {
+    /// `tracking`は文字のあとに空ける量で、印刷の原稿用紙で文字をマスより小さく置くのに使う
+    func update(usesKerning: Bool, isVertical: Bool, isManuscript: Bool = false, tracking: CGFloat = 0) {
         self.usesKerning = usesKerning
         self.isVertical = isVertical
         self.isManuscript = isManuscript
+        self.tracking = tracking
         replacements.removeAll()
         textView?.typingAttributes[.kern] = baseKern
         guard let storage = textView?.textStorage else { return }
@@ -78,8 +81,12 @@ final class JapaneseTypesetter {
         }
         var inherited = IndexSet(integersIn: Range(enclosing) ?? 0 ..< 0)
         inherited.subtract(fixed)
-        fixed.rangeView.forEach { write(.kern, 0 as NSNumber, in: NSRange($0), of: storage) }
+        fixed.rangeView.forEach { write(.kern, tracking as NSNumber, in: NSRange($0), of: storage) }
         inherited.rangeView.forEach { write(.kern, nil, in: NSRange($0), of: storage) }
+        // 2桁の数字は1マスに入れるので、数字のあいだを空けず、2字のあとにだけ空ける
+        for run in runs where tracking > 0 && (run.kind == .tateChuYoko || run.kind == .halfWidthPair) {
+            write(.kern, 0 as NSNumber, in: NSRange(location: run.range.location, length: 1), of: storage)
+        }
     }
 
     private func runs(in settled: IndexSet, of string: NSString, storage: NSTextStorage) -> [UprightGlyphs.Run] {

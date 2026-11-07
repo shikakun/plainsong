@@ -19,7 +19,7 @@ nonisolated struct ManuscriptPaper: Equatable {
     }
 
     static let cellsPerLine = 20
-    private static let linesPerPage = 20
+    static let linesPerPage = 20
     private static let cellsPerTab = Int(EditorSettings.tabEms)
 
     private static let hanging = Set("、。".unicodeScalars)

@@ -1200,6 +1200,22 @@
         }
       }
     },
+    "print.showsManuscriptGrid" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Print Grid"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "マス目を印刷"
+          }
+        }
+      }
+    },
     "print.showsPageNumbers" : {
       "localizations" : {
         "en" : {

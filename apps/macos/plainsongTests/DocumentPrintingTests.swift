@@ -32,10 +32,12 @@ struct DocumentPrintingTests {
     private func operation(
         _ text: String,
         orientation: EditorSettings.Orientation,
+        showsManuscriptGuide: Bool = false,
         savingTo url: URL
     ) -> NSPrintOperation {
         var settings = EditorSettings()
         settings.orientation = orientation
+        settings.showsManuscriptGuide = showsManuscriptGuide
         return DocumentPrintView.operation(
             text: text,
             settings: settings,
@@ -47,10 +49,8 @@ struct DocumentPrintingTests {
     @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical])
     func printsEveryLineOnceAcrossPages(orientation: EditorSettings.Orientation) throws {
         let url = temporaryURL()
-        let printed = try pages(
-            printedBy: operation(String(repeating: "印あいうえおかきくけ", count: 400), orientation: orientation, savingTo: url),
-            to: url
-        )
+        let text = String(repeating: "印あいうえ12月かきくけ", count: 400)
+        let printed = try pages(printedBy: operation(text, orientation: orientation, savingTo: url), to: url)
         #expect(printed.count > 1)
         #expect(printed.joined().count { $0 == "印" } == 400)
     }
@@ -97,5 +97,97 @@ struct DocumentPrintingTests {
         let options = try #require(printOperation.printPanel.accessoryControllers.first)
         #expect(options.view.frame.height > 0)
         #expect(options.view.frame.width > 0)
+    }
+
+    /// 空行も1行に数え、末尾の改行のあとの空の行は数えない
+    @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical])
+    func printsTwentyLinesPerManuscriptPage(orientation: EditorSettings.Orientation) throws {
+        for (text, pageCount) in [
+            (String(repeating: "印\n", count: 20), 1),
+            (String(repeating: "印\n", count: 21), 2),
+            (String(repeating: "\n", count: 40) + "印", 3),
+            ("", 1),
+        ] {
+            let url = temporaryURL()
+            let printed = try pages(
+                printedBy: operation(text, orientation: orientation, showsManuscriptGuide: true, savingTo: url),
+                to: url
+            )
+            #expect(printed.count == pageCount, "\(text.debugDescription)")
+            #expect(printed.joined().count { $0 == "印" } == text.count { $0 == "印" })
+        }
+    }
+
+    /// 枚数の表示と印刷の枚数が食い違わないよう、計算した行で組むことを確かめる
+    @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical])
+    func printsManuscriptWithThePageCountOfThePaper(orientation: EditorSettings.Orientation) throws {
+        let text = String(repeating: "印あいうえおかきくけこさしすせそたちつてと。「はい」12月とiPhone——", count: 40)
+        let url = temporaryURL()
+        let printed = try pages(
+            printedBy: operation(text, orientation: orientation, showsManuscriptGuide: true, savingTo: url),
+            to: url
+        )
+        let lines = ManuscriptPaper().count(in: text as NSString)
+        #expect(printed.count == ManuscriptPaper.pages(forLines: lines))
+        #expect(printed.joined().count { $0 == "印" } == 40)
+    }
+
+    private func inkedPixels(printedBy operation: NSPrintOperation, to url: URL) throws -> Int {
+        defer { try? FileManager.default.removeItem(at: url) }
+        operation.showsPrintPanel = false
+        operation.showsProgressPanel = false
+        #expect(operation.run())
+        let page = try #require(PDFDocument(url: url)?.page(at: 0))
+        let bounds = page.bounds(for: .mediaBox)
+        let context = try #require(CGContext(
+            data: nil,
+            width: Int(bounds.width),
+            height: Int(bounds.height),
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceGray(),
+            bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ))
+        context.setFillColor(gray: 1, alpha: 1)
+        context.fill(CGRect(origin: .zero, size: bounds.size))
+        page.draw(with: .mediaBox, to: context)
+        let data = try #require(context.data)
+        let pixels = UnsafeRawBufferPointer(start: data, count: context.bytesPerRow * context.height)
+        return (0 ..< context.height).reduce(0) { total, row in
+            let start = row * context.bytesPerRow
+            return total + pixels[start ..< start + context.width].count { $0 < 250 }
+        }
+    }
+
+    /// 本文がなくてもマス目は印刷し、選択を外せば消える
+    @Test
+    func printsManuscriptGridOnlyWhenEnabled() throws {
+        let withGridURL = temporaryURL()
+        let withGrid = operation("", orientation: .vertical, showsManuscriptGuide: true, savingTo: withGridURL)
+        #expect(try inkedPixels(printedBy: withGrid, to: withGridURL) > 1000)
+
+        let withoutGridURL = temporaryURL()
+        let withoutGrid = operation("", orientation: .vertical, showsManuscriptGuide: true, savingTo: withoutGridURL)
+        let view = try #require(withoutGrid.view as? DocumentPrintView)
+        view.showsManuscriptGrid = false
+        view.showsPageNumbers = false
+        #expect(try inkedPixels(printedBy: withoutGrid, to: withoutGridURL) == 0)
+    }
+
+    /// 縦中横は回転させて描くので、位置を誤ると字が欠ける。横書きと同じ字形なので、同じくらいのインクになる
+    @Test
+    func printsTwoDigitsInACellAsInHorizontalText() throws {
+        func ink(_ orientation: EditorSettings.Orientation) throws -> Int {
+            let url = temporaryURL()
+            let printOperation = operation("12", orientation: orientation, showsManuscriptGuide: true, savingTo: url)
+            let view = try #require(printOperation.view as? DocumentPrintView)
+            view.showsManuscriptGrid = false
+            view.showsPageNumbers = false
+            return try inkedPixels(printedBy: printOperation, to: url)
+        }
+        let vertical = try ink(.vertical)
+        let horizontal = try ink(.horizontal)
+        #expect(horizontal > 0)
+        #expect(abs(vertical - horizontal) * 4 < horizontal, "\(vertical), \(horizontal)")
     }
 }
