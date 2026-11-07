@@ -156,6 +156,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
             || settings.indentsParagraphs != previous?.indentsParagraphs
             || settings.paragraphIndent != previous?.paragraphIndent
             || settings.usesReadableWidth != previous?.usesReadableWidth
+            || settings.showsLineNumbers != previous?.showsLineNumbers
             || settings.guide != previous?.guide
         if typesettingChanged {
             if let container = textView.textContainer as? ManuscriptTextContainer {
