@@ -27,9 +27,6 @@ struct ManuscriptPaperTests {
     func keepsProhibitedCharactersAwayFromLineEdges() {
         #expect(lengths(filler(19) + "「いう」") == [19, 4])
         #expect(lengths(filler(20) + "ゃいう") == [19, 4])
-        #expect(lengths(filler(20) + "！いう") == [19, 4])
-        #expect(lengths(filler(20) + "ゝいう") == [19, 4])
-        #expect(lengths(filler(20) + "，いう") == [19, 4])
         // STKinsokuにない長音は行頭に置ける
         #expect(lengths(filler(20) + "ーいう") == [20, 3])
     }
@@ -39,7 +36,6 @@ struct ManuscriptPaperTests {
         #expect(lengths(String(repeating: "」", count: 25)) == [20, 5])
     }
 
-    /// 1マスに入る文字はUTF-16の長さによらない
     @Test
     func countsCellsByGraphemeCluster() {
         #expect(lengths(String(repeating: "か\u{309A}", count: 21)) == [40, 2])

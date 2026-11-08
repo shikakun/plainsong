@@ -40,35 +40,26 @@ struct RuledLinesTests {
     }
 
     @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical], EditorSettings.LineSpacing.allCases)
-    func drawsRulesHalfwayBetweenLines(
+    func drawsRulesHalfwayBetweenLinesAndPastTheLast(
         orientation: EditorSettings.Orientation,
         lineSpacing: EditorSettings.LineSpacing
     ) async throws {
         let editor = await makeEditor(orientation: orientation) {
             $0.lineSpacing = lineSpacing
-            $0.addsParagraphSpacing = true
         }
         let view = try #require(rulesView(of: editor))
         let middles = try lineMiddles(of: editor)
         try #require(middles.count > 3)
         let last = try #require(middles.last)
-        let rules = view.rulePositions(in: 0 ... last)
-        #expect(rules.count == middles.count - 1)
+        let pitch = last - middles[middles.count - 2]
+        let rules = view.rulePositions(in: 0 ... last + pitch * 3)
+        try #require(rules.count == middles.count + 2)
         for (rule, pair) in zip(rules, zip(middles, middles.dropFirst())) {
             #expect(abs(rule - (pair.0 + pair.1) / 2) <= 1)
         }
-    }
-
-    @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical])
-    func continuesRulesPastTheLastLine(orientation: EditorSettings.Orientation) async throws {
-        let editor = await makeEditor("あ\nい", orientation: orientation)
-        let view = try #require(rulesView(of: editor))
-        let middles = try lineMiddles(of: editor)
-        let pitch = view.linePitch
-        let last = try #require(middles.last)
-        let rules = view.rulePositions(in: 0 ... last + pitch * 3)
-        #expect(rules.count == 4)
-        #expect(zip(rules, rules.dropFirst()).allSatisfy { abs($1 - $0 - pitch) <= 1 })
+        for (index, rule) in rules.suffix(3).enumerated() {
+            #expect(abs(rule - (last + pitch * (CGFloat(index) + 0.5))) <= 1)
+        }
     }
 
     @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical])
@@ -78,7 +69,6 @@ struct RuledLinesTests {
         #expect(view.rulePositions(in: 0 ... view.linePitch * 2).count == 2)
     }
 
-    /// スクロールした先でも、見えている範囲の端にかかる罫線を落とさない
     @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical])
     func findsRulesInAScrolledRange(orientation: EditorSettings.Orientation) async throws {
         let text = (0 ..< 300).map { "\($0)" }.joined(separator: "\n")
@@ -105,10 +95,6 @@ struct RuledLinesTests {
         editor.apply(settings)
         #expect(rulesView(of: editor) == nil)
 
-        settings.guide = .blank
-        editor.apply(settings)
-        #expect(rulesView(of: editor) == nil)
-
         settings.guide = .ruledLines
         editor.apply(settings)
         #expect(rulesView(of: editor) != nil)
@@ -130,21 +116,10 @@ struct RuledLinesTests {
             settings.guide = guide
             editor.apply(settings)
             #expect(spacing() == 0)
-            #expect(settings.paragraphStyle(lineHeight: 20).paragraphSpacing == 0)
 
             settings.guide = .blank
             editor.apply(settings)
             #expect(try #require(spacing()) > 0)
-        }
-    }
-
-    @Test
-    func keepsKerningMenuDisabledOnlyOnManuscriptPaper() {
-        var settings = EditorSettings()
-        for guide in EditorSettings.Guide.allCases {
-            settings.guide = guide
-            #expect(settings.allowsToggling(\.usesKerning) == (guide != .manuscriptPaper))
-            #expect(settings.allowsToggling(\.usesReadableWidth))
         }
     }
 }

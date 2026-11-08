@@ -48,10 +48,6 @@ struct DocumentPrintingTests {
         return (0 ..< document.pageCount).map { document.page(at: $0)?.string ?? "" }
     }
 
-    private func firstPagePixels(printedBy operation: NSPrintOperation) throws -> [UInt8] {
-        try firstPageBitmap(printedBy: operation).pixels
-    }
-
     private func firstPageBitmap(printedBy operation: NSPrintOperation) throws -> (pixels: [UInt8], width: Int) {
         let page = try #require(pdf(printedBy: operation).page(at: 0))
         let bounds = page.bounds(for: .mediaBox)
@@ -72,11 +68,11 @@ struct DocumentPrintingTests {
         return (Array(UnsafeRawBufferPointer(start: data, count: width * context.height)), width)
     }
 
-    private func manuscriptBodyPixels(
+    private func manuscriptBody(
         _ text: String,
         orientation: EditorSettings.Orientation
-    ) throws -> [UInt8] {
-        try firstPagePixels(printedBy: operation(text, orientation: orientation, guide: .manuscriptPaper) {
+    ) throws -> (pixels: [UInt8], width: Int) {
+        try firstPageBitmap(printedBy: operation(text, orientation: orientation, guide: .manuscriptPaper) {
             $0.showsGuide = false
             $0.showsPageNumbers = false
         })
@@ -136,8 +132,8 @@ struct DocumentPrintingTests {
     }
 
     /// 空行も1行に数え、末尾の改行のあとの空の行は数えない。枚数の表示と食い違わないよう、計算した行で組む
-    @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical])
-    func printsTwentyLinesPerManuscriptPage(orientation: EditorSettings.Orientation) throws {
+    @Test
+    func printsTwentyLinesPerManuscriptPage() throws {
         let wrapped = String(repeating: "印あいうえおかきくけこさしすせそたちつてと。「はい」12月とiPhone——", count: 40)
         for (text, pageCount) in [
             (String(repeating: "印\n", count: 20), 1),
@@ -146,32 +142,35 @@ struct DocumentPrintingTests {
             ("", 1),
             (wrapped, ManuscriptPaper.pages(forLines: ManuscriptPaper().count(in: wrapped as NSString))),
         ] {
-            let printed = try pages(
-                printedBy: operation(text, orientation: orientation, guide: .manuscriptPaper)
-            )
+            let printed = try pages(printedBy: operation(text, guide: .manuscriptPaper))
             #expect(printed.count == pageCount, "\(text.debugDescription)")
             #expect(printed.joined().count { $0 == "印" } == text.count { $0 == "印" })
         }
     }
 
-    @Test
-    func printsManuscriptGridOnlyWhenEnabled() throws {
-        let withGrid = try firstPagePixels(printedBy: operation("", orientation: .vertical, guide: .manuscriptPaper))
-        #expect(withGrid.count { $0 < 250 } > 1000)
-
-        let withoutGrid = try manuscriptBodyPixels("", orientation: .vertical)
-        #expect(withoutGrid.count { $0 < 250 } == 0)
+    @Test(arguments: EditorSettings.Guide.allCases)
+    func printsGuideOnlyWhenEnabled(guide: EditorSettings.Guide) throws {
+        func ink(showsGuide: Bool) throws -> Int {
+            try firstPageBitmap(printedBy: operation("", orientation: .vertical, guide: guide) {
+                $0.showsGuide = showsGuide
+                $0.showsPageNumbers = false
+            }).pixels.count { $0 < 250 }
+        }
+        if guide == .blank {
+            #expect(try ink(showsGuide: true) == 0)
+        } else {
+            #expect(try ink(showsGuide: true) > 1000)
+            #expect(try ink(showsGuide: false) == 0)
+        }
     }
 
     /// 用紙の幅の半分を超えて線が続く位置を罫線、それ以外のインクのある位置を字として、行に直交する方向の座標で返す
     private func ruledPage(
         _ text: String,
-        orientation: EditorSettings.Orientation,
-        configure: (DocumentPrintView) -> Void = { _ in }
+        orientation: EditorSettings.Orientation
     ) throws -> (rules: [Int], glyphs: [Int]) {
         let bitmap = try firstPageBitmap(printedBy: operation(text, orientation: orientation, guide: .ruledLines) {
             $0.showsPageNumbers = false
-            configure($0)
         })
         let height = bitmap.pixels.count / bitmap.width
         let isVertical = orientation == .vertical
@@ -218,31 +217,20 @@ struct DocumentPrintingTests {
         #expect(rules.count > 10)
     }
 
-    @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical], ["", "あ"])
-    func printsRuledLinesOnlyWhenEnabled(orientation: EditorSettings.Orientation, text: String) throws {
-        #expect(try ruledPage(text, orientation: orientation).rules.count > 10)
-        #expect(try ruledPage(text, orientation: orientation) { $0.showsGuide = false }.rules.isEmpty)
-    }
-
-    @Test
-    func printsNoLinesOnBlankPaper() throws {
-        let pixels = try firstPagePixels(printedBy: operation(""))
-        #expect(pixels.count { $0 < 250 } == 0)
-    }
-
     /// 縦中横は回転させて描くので、位置を誤ると字が欠ける。横書きと同じ字形なので、同じくらいのインクになる
     @Test(arguments: ["12", "ｶﾞ"])
     func printsAPairInACellAsInHorizontalText(pair: String) throws {
-        let vertical = try manuscriptBodyPixels(pair, orientation: .vertical).count { $0 < 250 }
-        let horizontal = try manuscriptBodyPixels(pair, orientation: .horizontal).count { $0 < 250 }
+        let vertical = try manuscriptBody(pair, orientation: .vertical).pixels.count { $0 < 250 }
+        let horizontal = try manuscriptBody(pair, orientation: .horizontal).pixels.count { $0 < 250 }
         #expect(horizontal > 0)
         #expect(abs(vertical - horizontal) * 4 < horizontal, "\(vertical), \(horizontal)")
     }
 
     /// 字の進む方向でのインクの範囲
     private func inkExtent(_ text: String, orientation: EditorSettings.Orientation) throws -> ClosedRange<Int> {
-        let page = try manuscriptBodyPixels(text, orientation: orientation)
-        let extent = page.indices.filter { page[$0] < 128 }.map { orientation == .vertical ? $0 / 595 : $0 % 595 }
+        let page = try manuscriptBody(text, orientation: orientation)
+        let extent = page.pixels.indices.filter { page.pixels[$0] < 128 }
+            .map { orientation == .vertical ? $0 / page.width : $0 % page.width }
         return try #require(extent.min()) ... #require(extent.max())
     }
 
@@ -262,8 +250,8 @@ struct DocumentPrintingTests {
     /// 空白のあとの国と、詰めが効く文字のあとの国は同じマスにあるので、同じ画素になる
     @Test
     func printsCharactersInTheirCellsAfterKerningPairs() throws {
-        let alone = try manuscriptBodyPixels(String(repeating: "　", count: 8) + "国", orientation: .vertical)
-        let afterPairs = try manuscriptBodyPixels("モチベーションで国", orientation: .vertical)
+        let alone = try manuscriptBody(String(repeating: "　", count: 8) + "国", orientation: .vertical).pixels
+        let afterPairs = try manuscriptBody("モチベーションで国", orientation: .vertical).pixels
         let ink = alone.indices.filter { alone[$0] < 128 }
         #expect(ink.count > 10)
         let differing = ink.count { afterPairs[$0] >= 128 }

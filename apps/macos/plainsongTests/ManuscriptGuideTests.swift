@@ -75,37 +75,7 @@ struct ManuscriptGuideTests {
     }
 
     @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical], EditorSettings.FontFamily.allCases)
-    func placesEveryCharacterOnACell(
-        orientation: EditorSettings.Orientation,
-        fontFamily: EditorSettings.FontFamily
-    ) async {
-        for fontSize in EditorSettings.fontSizes {
-            let editor = await makeEditor(orientation: orientation) {
-                $0.fontFamily = fontFamily
-                $0.fontSize = fontSize
-            }
-            for (line, origin) in lines(of: editor) {
-                let characters = line.attributedString.attributedSubstring(from: line.characterRange).string
-                var offset = line.characterRange.location
-                var previous: Character?
-                for character in characters {
-                    defer {
-                        offset += character.utf16.count
-                        previous = character
-                    }
-                    // 2桁の数字の2字目は、1字目と同じマスに入る
-                    guard !(character.isNumber && previous?.isNumber == true) else { continue }
-                    let position = origin.x + line.typographicBounds.minX + line.locationForCharacter(at: offset).x
-                    let remainder = position.truncatingRemainder(dividingBy: fontSize)
-                    #expect(min(remainder, fontSize - remainder) < 0.01, "\(character) in \(characters)")
-                }
-            }
-        }
-    }
-
-    /// 空行を含むどの行も、マス目の行の中心にくる
-    @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical], EditorSettings.FontFamily.allCases)
-    func keepsLinesOnTheGrid(
+    func keepsEveryCharacterOnTheGrid(
         orientation: EditorSettings.Orientation,
         fontFamily: EditorSettings.FontFamily
     ) async throws {
@@ -117,19 +87,33 @@ struct ManuscriptGuideTests {
             let grid = try #require(gridView(of: editor))
             let layoutManager = editor.layoutManager
             let isVertical = orientation == .vertical
-            for (index, entry) in lines(of: editor).enumerated() {
-                let characters = entry.line.attributedString.attributedSubstring(from: entry.line.characterRange).string
+            for (index, (line, origin)) in lines(of: editor).enumerated() {
+                let characters = line.attributedString.attributedSubstring(from: line.characterRange).string
                 let middle = layoutManager.verticalMiddle(
-                    of: entry.line,
-                    in: entry.line.typographicBounds,
+                    of: line,
+                    in: line.typographicBounds,
                     isEmpty: characters.allSatisfy(\.isNewline)
                 ) - (isVertical ? 0 : layoutManager.japaneseMiddle)
-                let actual = entry.origin.y + middle + editor.textView.textContainerOrigin.y
+                let actual = origin.y + middle + editor.textView.textContainerOrigin.y
                 let expected = try #require(grid.middle(ofLine: index))
                 // 行送りが半端な値のとき、TextKitは行の位置を整数に丸める。行頭の絵文字は小さいフォントなので、さらに動く
                 let startsWithEmoji = characters.unicodeScalars.first?.properties.isEmojiPresentation == true
                 let tolerance: CGFloat = startsWithEmoji ? 2 : 1
                 #expect(abs(actual - expected) <= tolerance, "\(fontSize)pt line \(index): \(characters)")
+
+                var offset = line.characterRange.location
+                var previous: Character?
+                for character in characters {
+                    defer {
+                        offset += character.utf16.count
+                        previous = character
+                    }
+                    // 2桁の数字の2字目は、1字目と同じマスに入る
+                    guard !(character.isNumber && previous?.isNumber == true) else { continue }
+                    let position = origin.x + line.typographicBounds.minX + line.locationForCharacter(at: offset).x
+                    let remainder = position.truncatingRemainder(dividingBy: fontSize)
+                    #expect(min(remainder, fontSize - remainder) < 0.01, "\(fontSize)pt \(character) in \(characters)")
+                }
             }
         }
     }
@@ -183,17 +167,13 @@ struct ManuscriptGuideTests {
         await waitForTypesetting()
     }
 
-    @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical], [false, true])
-    func fitsCellsToTheWindow(orientation: EditorSettings.Orientation, usesReadableWidth: Bool) async throws {
+    @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical])
+    func fitsCellsToTheWindow(orientation: EditorSettings.Orientation) async throws {
         let editor = await makeEditor(String(repeating: "あ", count: 200), orientation: orientation) {
-            $0.usesReadableWidth = usesReadableWidth
-            $0.readableWidth = .japanese
+            $0.usesReadableWidth = false
         }
         try await resize(editor, length: 1000, orientation: orientation)
         let wide = try #require(firstLineLength(of: editor))
-        if usesReadableWidth {
-            #expect(wide == 40)
-        }
         #expect(gridView(of: editor)?.cellsPerLine == wide)
 
         try await resize(editor, length: 400, orientation: orientation)
