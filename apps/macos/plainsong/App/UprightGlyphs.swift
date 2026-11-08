@@ -142,6 +142,7 @@ nonisolated enum UprightGlyphs {
     private static let advanceTolerance: CGFloat = 0.01
 
     private static func width(of character: Character, in font: NSFont) -> CGFloat {
+        // 原稿用紙の本文には約物の詰めを止めるkern 0を指定するので、測るときもそろえる
         let string = NSAttributedString(string: String(character), attributes: [.font: font, .kern: 0])
         return CTLineGetTypographicBounds(CTLineCreateWithAttributedString(string), nil, nil, nil)
     }
