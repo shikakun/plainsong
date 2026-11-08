@@ -47,7 +47,6 @@ final class ManuscriptGridView: GuideLineView {
         didSet { needsDisplay = true }
     }
 
-    /// 組むときの座標で返す。縦書きでは右の列からの距離になる
     func middle(ofLine line: Int) -> CGFloat? {
         firstLineMiddle.map { $0 + CGFloat(line) * linePitch }
     }

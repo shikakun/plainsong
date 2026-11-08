@@ -1,7 +1,7 @@
 import AppKit
 
 enum RuledLines {
-    /// 隣りあう行の字面の中間に引き、1行目の前には引かない。`continues`なら、最後の行のあとも同じ行送りで続ける
+    /// 1行目の前には引かない
     static func positions(
         betweenLinesAt middles: [CGFloat],
         pitch: CGFloat,
@@ -41,7 +41,6 @@ final class RuledLinesView: GuideLineView {
         preconditionFailure("init(coder:) is not supported")
     }
 
-    /// テキストビューの座標で返す
     func rulePositions(in range: ClosedRange<CGFloat>) -> [CGFloat] {
         guard linePitch > 0 else { return [] }
         var (middles, reachesEnd) = lineMiddles(in: range)

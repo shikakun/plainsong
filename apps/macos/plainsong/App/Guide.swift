@@ -30,7 +30,6 @@ extension EditorSettings {
     }
 }
 
-/// 本文に重ねて線を描く。本文の操作を妨げないよう、イベントを受けない
 class GuideLineView: NSView {
     let textView: NSTextView
 
@@ -84,7 +83,7 @@ class GuideLineView: NSView {
         needsDisplay = true
     }
 
-    /// 組むときの座標で返す。縦書きでは右の列からの距離になる
+    /// テキストビューの座標で返す。縦書きでは右の列からの距離になる
     var firstLineMiddle: CGFloat? {
         textView.textLayoutManager?.firstLineMiddle.map { $0 + textView.textContainerOrigin.y }
     }

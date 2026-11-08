@@ -14,7 +14,7 @@ extension EditorSettings {
     }
 }
 
-/// 本文の行頭の側の余白に重ね、段落ごとなら改行のあとに始まる行に、行ごとなら折り返した行にも番号を描く。描くのは見えている行だけ
+/// 本文の行頭の側の余白に重ねる。描くのは見えている行だけ
 final class LineNumberView: NSView {
     private let textView: NSTextView
     /// 前回描いたときの、先頭の段落の位置と行番号。そこから数えれば、文書の先頭から数え直さずに済む
