@@ -135,7 +135,7 @@ struct ManuscriptGuideTests {
                             "\(fontSize)pt \(character) in \(characters)"
                         )
                     } when: {
-                        followsUnfixedAdvance
+                        fontFamily == .serif && followsUnfixedAdvance
                     }
                 }
             }
