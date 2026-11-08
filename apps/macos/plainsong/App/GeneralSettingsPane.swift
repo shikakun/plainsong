@@ -7,6 +7,7 @@ final class GeneralSettingsPane: SettingsPane {
     private let fontSizeSlider = NSSlider()
     private let lineSpacingControl = NSSegmentedControl()
     private let orientationOptions: OrientationOptions
+    private let guideOptions: GuideOptions
     private let kerningCheckbox = NSButton(
         checkboxWithTitle: String(localized: "settings.kerning"),
         target: nil,
@@ -36,11 +37,8 @@ final class GeneralSettingsPane: SettingsPane {
     )
     private let whitespaceScopeButton = NSPopUpButton()
     private var whitespaceScopeRow: NSGridRow?
-    private let lineNumbersCheckbox = NSButton(
-        checkboxWithTitle: String(localized: "settings.showsLineNumbers"),
-        target: nil,
-        action: nil
-    )
+    private let lineNumberOptions: LineNumberOptions
+    private var lineNumberUnitRow: NSGridRow?
     private let paragraphSpacingCheckbox = NSButton(
         checkboxWithTitle: String(localized: "settings.addsParagraphSpacing"),
         target: nil,
@@ -70,6 +68,8 @@ final class GeneralSettingsPane: SettingsPane {
         self.model = model
         self.relaunch = relaunch
         orientationOptions = OrientationOptions(model: model)
+        guideOptions = GuideOptions(model: model)
+        lineNumberOptions = LineNumberOptions(model: model)
         super.init(title: String(localized: "settings.general"))
         NotificationCenter.default.addObserver(
             self,
@@ -137,13 +137,14 @@ final class GeneralSettingsPane: SettingsPane {
         sliderRow.yPlacement = .center
 
         let orientationGrid = orientationOptions.makeSection()
+        let guideGrid = guideOptions.makeSection()
         let optionsGrid = makeOptionsSection()
         let popUpGrid = Self.columns([makeLanguageRow(), makeIconRow()])
         let filesGrid = makeFilesSection()
         let startupGrid = makeStartupSection()
         updateSettingsControls()
-        Self.alignLabelColumns([grid, orientationGrid, optionsGrid, filesGrid, popUpGrid, startupGrid])
-        return [grid, orientationGrid, optionsGrid, filesGrid, Self.separator(), popUpGrid, startupGrid]
+        Self.alignLabelColumns([grid, orientationGrid, guideGrid, optionsGrid, filesGrid, popUpGrid, startupGrid])
+        return [grid, orientationGrid, guideGrid, optionsGrid, filesGrid, Self.separator(), popUpGrid, startupGrid]
     }
 
     private func makeLanguageRow() -> [NSView] {
@@ -223,6 +224,8 @@ final class GeneralSettingsPane: SettingsPane {
         lineSpacingControl.selectedSegment =
             EditorSettings.LineSpacing.allCases.firstIndex(of: settings.lineSpacing) ?? 0
         orientationOptions.update(with: settings)
+        guideOptions.update(with: settings)
+        updateControlsIgnoredByGuide(with: settings)
         kerningCheckbox.state = settings.usesKerning ? .on : .off
         readableWidthCheckbox.state = settings.usesReadableWidth ? .on : .off
         readableWidthButton.selectItem(for: settings.readableWidth)
@@ -230,7 +233,7 @@ final class GeneralSettingsPane: SettingsPane {
         newlinesCheckbox.state = settings.showsNewlines ? .on : .off
         whitespaceCheckbox.state = settings.showsWhitespace ? .on : .off
         whitespaceScopeButton.selectItem(for: settings.whitespaceScope)
-        lineNumbersCheckbox.state = settings.showsLineNumbers ? .on : .off
+        lineNumberOptions.update(with: settings)
         paragraphSpacingCheckbox.state = settings.addsParagraphSpacing ? .on : .off
         paragraphSpacingButton.selectItem(for: settings.paragraphSpacing)
         paragraphIndentCheckbox.state = settings.indentsParagraphs ? .on : .off
@@ -238,6 +241,7 @@ final class GeneralSettingsPane: SettingsPane {
         fileAutosaveButton.selectItem(for: settings.fileAutosave)
         setRow(readableWidthRow, hidden: !settings.usesReadableWidth)
         setRow(whitespaceScopeRow, hidden: !settings.showsWhitespace)
+        setRow(lineNumberUnitRow, hidden: !settings.showsLineNumbers)
         setRow(paragraphSpacingRow, hidden: !settings.addsParagraphSpacing)
         setRow(paragraphIndentRow, hidden: !settings.indentsParagraphs)
         setRow(openBackupsRow, hidden: settings.fileAutosave != .backup)
@@ -335,6 +339,15 @@ final class GeneralSettingsPane: SettingsPane {
 }
 
 extension GeneralSettingsPane {
+    private func updateControlsIgnoredByGuide(with settings: EditorSettings) {
+        for control: NSControl in [kerningCheckbox, markdownCheckbox] {
+            control.isEnabled = !settings.showsManuscriptGuide
+        }
+        for control: NSControl in [paragraphSpacingCheckbox, paragraphSpacingButton] {
+            control.isEnabled = settings.guide == .blank
+        }
+    }
+
     private func makeOptionsSection() -> NSGridView {
         kerningCheckbox.target = self
         kerningCheckbox.action = #selector(changeKerning(_:))
@@ -360,9 +373,6 @@ extension GeneralSettingsPane {
         whitespaceScopeButton.action = #selector(changeWhitespaceScope(_:))
         whitespaceScopeButton.setAccessibilityLabel(String(localized: "settings.whitespaceScope"))
 
-        lineNumbersCheckbox.target = self
-        lineNumbersCheckbox.action = #selector(changeShowsLineNumbers(_:))
-
         paragraphSpacingCheckbox.target = self
         paragraphSpacingCheckbox.action = #selector(changeAddsParagraphSpacing(_:))
         paragraphSpacingButton.addItems(for: EditorSettings.ParagraphSpacing.self, title: \.title)
@@ -382,7 +392,8 @@ extension GeneralSettingsPane {
             [NSGridCell.emptyContentView, newlinesCheckbox],
             [NSGridCell.emptyContentView, whitespaceCheckbox],
             [NSGridCell.emptyContentView, whitespaceScopeButton],
-            [NSGridCell.emptyContentView, lineNumbersCheckbox],
+            [NSGridCell.emptyContentView, lineNumberOptions.checkbox],
+            [NSGridCell.emptyContentView, lineNumberOptions.unitButton],
             [NSGridCell.emptyContentView, paragraphSpacingCheckbox],
             [NSGridCell.emptyContentView, paragraphSpacingButton],
             [NSGridCell.emptyContentView, paragraphIndentCheckbox],
@@ -393,6 +404,7 @@ extension GeneralSettingsPane {
         ])
         optionsGrid.rowSpacing = 6
         whitespaceScopeRow = indent(whitespaceScopeButton, under: whitespaceCheckbox, in: optionsGrid)
+        lineNumberUnitRow = indent(lineNumberOptions.unitButton, under: lineNumberOptions.checkbox, in: optionsGrid)
         paragraphSpacingRow = indent(paragraphSpacingButton, under: paragraphSpacingCheckbox, in: optionsGrid)
         paragraphIndentRow = indent(paragraphIndentButton, under: paragraphIndentCheckbox, in: optionsGrid)
         readableWidthRow = indent(readableWidthButton, under: readableWidthCheckbox, in: optionsGrid)
@@ -433,10 +445,6 @@ extension GeneralSettingsPane {
         model.update { $0.showsWhitespace = sender.state == .on }
     }
 
-    @objc private func changeShowsLineNumbers(_ sender: NSButton) {
-        model.update { $0.showsLineNumbers = sender.state == .on }
-    }
-
     @objc private func changeAddsParagraphSpacing(_ sender: NSButton) {
         model.update { $0.addsParagraphSpacing = sender.state == .on }
     }
@@ -461,7 +469,7 @@ extension GeneralSettingsPane {
     }
 }
 
-private extension NSPopUpButton {
+extension NSPopUpButton {
     func addItems<Value: CaseIterable>(for _: Value.Type, title: (Value) -> String) {
         for value in Value.allCases {
             addItem(withTitle: title(value))

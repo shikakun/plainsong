@@ -104,6 +104,7 @@ enum ToolbarItemKind: String, ExtensionItemKind {
 enum StatusBarItemKind: String, ExtensionItemKind {
     case characterCount
     case wordCount
+    case manuscriptPages
     case fileEncoding
     case lineEnding
 
@@ -111,6 +112,7 @@ enum StatusBarItemKind: String, ExtensionItemKind {
         switch self {
         case .characterCount: String(localized: "statusBarItem.characterCount")
         case .wordCount: String(localized: "statusBarItem.wordCount")
+        case .manuscriptPages: String(localized: "statusBarItem.manuscriptPages")
         case .fileEncoding: String(localized: "statusBarItem.fileEncoding")
         case .lineEnding: String(localized: "statusBarItem.lineEnding")
         }
@@ -120,6 +122,7 @@ enum StatusBarItemKind: String, ExtensionItemKind {
         switch self {
         case .characterCount: String(localized: "statusBarItem.characterCount.summary")
         case .wordCount: String(localized: "statusBarItem.wordCount.summary")
+        case .manuscriptPages: String(localized: "statusBarItem.manuscriptPages.summary")
         case .fileEncoding: String(localized: "statusBarItem.fileEncoding.summary")
         case .lineEnding: String(localized: "statusBarItem.lineEnding.summary")
         }
@@ -128,7 +131,7 @@ enum StatusBarItemKind: String, ExtensionItemKind {
     var hasOptions: Bool {
         switch self {
         case .characterCount, .wordCount: true
-        case .fileEncoding, .lineEnding: false
+        case .manuscriptPages, .fileEncoding, .lineEnding: false
         }
     }
 }

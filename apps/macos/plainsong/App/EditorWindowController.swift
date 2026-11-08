@@ -3,10 +3,10 @@ import AppKit
 final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private let editorWindow: NSWindow
     /// ステータスバーを本文に重ねるための入れ物。NSScrollViewは、サブビューにAuto Layoutの結果を反映しない
-    private let container = NSView()
+    let container = NSView()
     let scrollView = NSScrollView()
     let textView: NSTextView
-    private let layoutManager: LineHeightSegmentLayoutManager
+    let layoutManager: LineHeightSegmentLayoutManager
     /// レイアウトマネージャーはデリゲートを弱参照で持つので、ここで持っておく
     let whitespaceMarkers = WhitespaceMarkers()
     let markdownHighlighter: MarkdownHighlighter
@@ -20,7 +20,9 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private var toolbar: EditorToolbar?
     private var statusBar: StatusBar?
     private var lineNumberView: LineNumberView?
-    private var theme: Theme?
+    var manuscriptGridView: ManuscriptGridView?
+    var ruledLinesView: RuledLinesView?
+    var theme: Theme?
     /// 「デフォルト」とテーマにないキーは、NSTextViewが最初に持っている選択範囲の色に戻す
     private let standardSelectedTextAttributes: [NSAttributedString.Key: Any]
     var fileEncoding = FileEncoding.utf8 {
@@ -137,10 +139,13 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         let orientationChanged = settings.orientation != previous?.orientation ?? .horizontal
         if orientationChanged {
             textView.discardMarkedTextIfNeeded()
-            // 縦書きでは、立てる英数に差し替えた和文のフォントの行間で行送りが広がるので、フォントの行間を使わない
-            // 横書きでは、使わないと明朝体のベースラインがずれる
-            layoutManager.usesFontLeading = settings.orientation == .horizontal
             textView.setLayoutOrientation(settings.orientation.layoutOrientation)
+        }
+        // 縦書きと原稿用紙では、立てる英数に差し替えた和文のフォントの行間で行送りが広がるので、フォントの行間を使わない
+        // 横書きでは、使わないと明朝体のベースラインがずれる
+        let usesFontLeading = settings.orientation == .horizontal && !settings.showsManuscriptGuide
+        if layoutManager.usesFontLeading != usesFontLeading {
+            layoutManager.usesFontLeading = usesFontLeading
         }
         let typesettingChanged = settings.fontFamily != previous?.fontFamily
             || settings.fontSize != previous?.fontSize
@@ -151,7 +156,16 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
             || settings.indentsParagraphs != previous?.indentsParagraphs
             || settings.paragraphIndent != previous?.paragraphIndent
             || settings.usesReadableWidth != previous?.usesReadableWidth
+            || settings.showsLineNumbers != previous?.showsLineNumbers
+            || settings.guide != previous?.guide
         if typesettingChanged {
+            if let container = textView.textContainer as? ManuscriptTextContainer {
+                // マス数はウィンドウの大きさで決まるので、`updateInsets()`で渡す
+                if !settings.showsManuscriptGuide {
+                    container.paper = nil
+                }
+                container.cellWidth = settings.fontSize
+            }
             applyFont(of: settings)
         }
         // 起動して「デフォルト」のままなら、システムの色のままなので何もしない
@@ -165,8 +179,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         }
         applyWhitespace(of: settings)
         applyLineNumbers(of: settings)
+        applyManuscriptGrid(of: settings)
+        applyRuledLines(of: settings)
         observeClipViewFrame(
-            settings.usesReadableWidth || settings.showsLineNumbers || settings.orientation == .vertical
+            settings.usesReadableWidth || settings.showsManuscriptGuide
+                || settings.showsLineNumbers || settings.orientation == .vertical
         )
         applyToolbar(of: settings)
         applyStatusBar(of: settings)
@@ -176,14 +193,13 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
 
     /// 本文全体を1回の編集で書き換える。属性の変更なので、TextStoreは記録せず、取り消しの履歴にも入らない
     private func applyFont(of settings: EditorSettings) {
-        let font = settings.fontFamily.font(ofSize: settings.fontSize)
-        // 明朝体の欧文は文字サイズによって行の高さが1ptずれるので、フォントを切り替えても行送りが変わらないようゴシック体の高さに揃える
-        let sansSerif = EditorSettings.FontFamily.sansSerif.font(ofSize: settings.fontSize)
-        let lineHeight = Self.metrics.defaultLineHeight(for: sansSerif)
+        let bodyFont = settings.fontFamily.font(ofSize: settings.fontSize)
+        let lineHeight = Self.lineHeight(of: settings)
         let paragraphStyle = settings.paragraphStyle(lineHeight: lineHeight)
         layoutManager.lineHeight = lineHeight
-        let japanese = CTFontCreateForString(font, "あ" as CFString, CFRange(location: 0, length: 1)) as NSFont
+        let japanese = EditorSettings.japaneseFont(for: bodyFont)
         layoutManager.japaneseMiddle = (japanese.ascender + japanese.descender) / 2
+        let font = settings.bodyFont
 
         // defaultParagraphStyleは、変換を通さずに入力した文字には付かないので、入力する文字の属性に指定する
         textView.typingAttributes[.font] = font
@@ -210,6 +226,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
             ?? standardSelectedTextAttributes[.foregroundColor]
         textView.selectedTextAttributes = selectedTextAttributes
         statusBar?.backgroundColor = theme?.background
+        manuscriptGridView?.color = theme?.foreground ?? .labelColor
+        ruledLinesView?.color = theme?.foreground ?? .labelColor
         whitespaceMarkers.color = theme?.foreground.map { $0.withAlphaComponent(0.3) } ?? .tertiaryLabelColor
         if whitespaceMarkers.scope != nil || whitespaceMarkers.showsNewlines {
             redrawText()
@@ -217,7 +235,8 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private var markdownFlavor: MarkdownSyntax.Flavor? {
-        guard settings?.highlightsMarkdown == true else { return nil }
+        // 原稿用紙では、記法で変えたフォントや字下げがマスからずれる
+        guard let settings, settings.highlightsMarkdown, !settings.showsManuscriptGuide else { return nil }
         return MarkdownSyntax.Flavor(url: (document as? NSDocument)?.fileURL)
     }
 
@@ -226,7 +245,11 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     private func applyMarkdown() {
         guard let settings else { return }
         markdownHighlighter.update(flavor: markdownFlavor, appearance: .init(settings: settings, theme: theme))
-        typesetter.update(usesKerning: settings.usesKerning, isVertical: settings.orientation == .vertical)
+        typesetter.update(
+            usesKerning: settings.usesKerning && !settings.showsManuscriptGuide,
+            isVertical: settings.orientation == .vertical,
+            manuscriptFont: settings.showsManuscriptGuide ? settings.bodyFont : nil
+        )
     }
 
     private func applyWhitespace(of settings: EditorSettings) {
@@ -270,18 +293,6 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         setNeedsDisplay(textView)
     }
 
-    private func applyLineNumbers(of settings: EditorSettings) {
-        if settings.showsLineNumbers, lineNumberView == nil {
-            let lineNumberView = LineNumberView(textView: textView)
-            container.addSubview(lineNumberView, positioned: .above, relativeTo: scrollView)
-            self.lineNumberView = lineNumberView
-        } else if !settings.showsLineNumbers {
-            lineNumberView?.removeFromSuperview()
-            lineNumberView = nil
-        }
-        lineNumberView?.fontSize = settings.fontSize
-    }
-
     private func applyToolbar(of settings: EditorSettings) {
         let kinds = settings.enabledToolbarItems
         if kinds != toolbar?.kinds ?? [] {
@@ -320,25 +331,6 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         return statusBar
     }
 
-    /// TextKit 2が組む、行間を含まない1行の高さを求める
-    private static let metrics = NSLayoutManager()
-
-    /// scrollableTextView()ではレイアウトマネージャーを差し替えられないので、同じ構成を自分で組む
-    private static func makeTextView() -> (NSTextView, LineHeightSegmentLayoutManager) {
-        let layoutManager = LineHeightSegmentLayoutManager()
-        let contentStorage = TrailingNewlineContentStorage()
-        contentStorage.addTextLayoutManager(layoutManager)
-        contentStorage.delegate = ParagraphIndentRules.shared
-        let container = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
-        container.widthTracksTextView = true
-        layoutManager.textContainer = container
-        let textView = NSTextView(frame: .zero, textContainer: container)
-        textView.autoresizingMask = [.width, .height]
-        textView.isVerticallyResizable = true
-        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        return (textView, layoutManager)
-    }
-
     private static func configure(_ textView: NSTextView) {
         textView.isRichText = false
         textView.importsGraphics = false
@@ -362,6 +354,19 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
 }
 
 extension EditorWindowController {
+    private func applyLineNumbers(of settings: EditorSettings) {
+        if settings.showsLineNumbers, lineNumberView == nil {
+            let lineNumberView = LineNumberView(textView: textView)
+            container.addSubview(lineNumberView, positioned: .above, relativeTo: scrollView)
+            self.lineNumberView = lineNumberView
+        } else if !settings.showsLineNumbers {
+            lineNumberView?.removeFromSuperview()
+            lineNumberView = nil
+        }
+        lineNumberView?.fontSize = settings.fontSize
+        lineNumberView?.unit = settings.lineNumberUnit
+    }
+
     private func titlebarDidChange() {
         guard measureTitlebar() else { return }
         updateInsets()
@@ -405,18 +410,26 @@ extension EditorWindowController {
         let isVertical = settings.orientation == .vertical
         let clipLength = isVertical ? clipSize.height : clipSize.width
         let gutter = settings.lineNumberGutter
-        let minimumLeading = if isVertical {
-            settings.showsLineNumbers ? topInset + gutter : topInset
-        } else {
-            settings.showsLineNumbers ? gutter : settings.minimumInset
-        }
+        let baseLeading = isVertical ? topInset : settings.minimumInset
+        let minimumLeading = settings.showsLineNumbers ? baseLeading + gutter / 2 : baseLeading
         let minimumTrailing = isVertical ? bottomInset : settings.minimumInset
+        if settings.showsManuscriptGuide {
+            applyManuscriptCells(settings.manuscriptCells(
+                clipLength: clipLength,
+                minimumLeading: minimumLeading,
+                minimumTrailing: minimumTrailing
+            ), of: settings)
+        }
         let (leading, trailing) = settings.lineInsets(
             clipLength: clipLength,
             minimumLeading: minimumLeading,
             minimumTrailing: minimumTrailing
         )
-        let expansion = settings.crossInsetExpansion(trailing: trailing, minimumTrailing: minimumTrailing)
+        let expansion = settings.crossInsetExpansion(
+            clipLength: clipLength,
+            minimumLeading: minimumLeading,
+            minimumTrailing: minimumTrailing
+        )
         lineNumberView?.frame = isVertical
             ? NSRect(x: 0, y: container.bounds.height - leading, width: container.bounds.width, height: gutter)
             : NSRect(x: leading - gutter, y: 0, width: gutter, height: container.bounds.height)
@@ -441,6 +454,8 @@ extension EditorWindowController {
             textView.setFrameOrigin(.zero)
         }
         setContentInsets(clipInsets)
+        manuscriptGridView?.needsDisplay = true
+        ruledLinesView?.needsDisplay = true
         scrollView.scrollerInsets = NSEdgeInsets(top: 0, left: 0, bottom: statusBarHeight, right: 0)
     }
 

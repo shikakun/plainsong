@@ -78,6 +78,8 @@ enum MainMenu {
             item("menu.saveAs", #selector(NSDocument.saveAs(_:)), key: "s"),
             item("menu.rename", #selector(NSDocument.rename(_:))),
             item("menu.moveTo", #selector(NSDocument.move(_:))),
+            .separator(),
+            item("menu.print", #selector(NSDocument.printDocument(_:)), key: "p"),
         ])
     }
 
@@ -133,6 +135,9 @@ enum MainMenu {
         let orientations = EditorSettings.Orientation.allCases.map { orientation in
             choice(orientation.title, #selector(AppDelegate.selectOrientation(_:)), orientation)
         }
+        let guides = EditorSettings.Guide.allCases.map { guide in
+            choice(guide.title, #selector(AppDelegate.selectGuide(_:)), guide)
+        }
         return menu("menu.view", [
             submenu("settings.fontSize", [
                 item("menu.fontSize.bigger", #selector(AppDelegate.increaseFontSize(_:)), key: "+"),
@@ -142,6 +147,7 @@ enum MainMenu {
             submenu("settings.lineSpacing", lineSpacings),
             submenu("settings.fontFamily", fontFamilies),
             submenu("settings.orientation", orientations),
+            submenu("settings.guide", guides),
             .separator(),
             toggle("settings.kerning", \.usesKerning, key: "k"),
             toggle("settings.showsNewlines", \.showsNewlines, key: "l"),

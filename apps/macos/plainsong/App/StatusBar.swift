@@ -14,6 +14,7 @@ final class StatusBar: NSView {
     private lazy var settingsTrailing = settingsButton.trailingAnchor.constraint(equalTo: trailingAnchor)
     private var characterCount: CountField<CharacterCountOptions>?
     private var wordCount: CountField<WordCountMethod>?
+    private var manuscriptPages: CountField<ManuscriptPaper>?
     private var fileEncoding: StatusBarField?
     private var lineEnding: StatusBarField?
     private var showsOnHover = false
@@ -134,6 +135,11 @@ final class StatusBar: NSView {
             isEnabled: kinds.contains(.characterCount)
         )
         wordCount = countField(wordCount, counter: settings.wordCount, isEnabled: kinds.contains(.wordCount))
+        manuscriptPages = countField(
+            manuscriptPages,
+            counter: settings.manuscriptPaper,
+            isEnabled: kinds.contains(.manuscriptPages)
+        )
         fileEncoding = valueField(fileEncoding, kind: .fileEncoding, value: fileEncodingName, in: kinds)
         lineEnding = valueField(lineEnding, kind: .lineEnding, value: lineEndingName, in: kinds)
         let views = kinds.compactMap(view(for:))
@@ -172,6 +178,7 @@ final class StatusBar: NSView {
         switch kind {
         case .characterCount: characterCount
         case .wordCount: wordCount
+        case .manuscriptPages: manuscriptPages
         case .fileEncoding: fileEncoding
         case .lineEnding: lineEnding
         }
@@ -284,6 +291,17 @@ extension WordCountMethod: @MainActor StatusBarCounter {
 
     static func selected(_ count: Int) -> String {
         String(localized: "statusBar.wordCount.selected \(count)")
+    }
+}
+
+/// 枚数は段落ごとに足せないので、行数を数えておき、表示するときに枚数に直す
+extension ManuscriptPaper: @MainActor StatusBarCounter {
+    static func total(_ count: Int) -> String {
+        String(localized: "statusBar.manuscriptPages \(pages(forLines: count))")
+    }
+
+    static func selected(_ count: Int) -> String {
+        String(localized: "statusBar.manuscriptPages.selected \(pages(forLines: count))")
     }
 }
 

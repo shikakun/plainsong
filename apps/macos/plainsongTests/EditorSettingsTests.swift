@@ -11,7 +11,40 @@ struct EditorSettingsTests {
         settings.readableWidth = .japanese
         let insets = settings.lineInsets(clipLength: 1000, minimumLeading: 60, minimumTrailing: 40)
         #expect(insets == (180, 180))
-        #expect(settings.crossInsetExpansion(trailing: insets.trailing, minimumTrailing: 40) == 64)
+        #expect(settings.crossInsetExpansion(clipLength: 1000, minimumLeading: 60, minimumTrailing: 40) == 64)
+    }
+
+    @Test
+    func decidesManuscriptCellsFromReadableWidthAndWindow() {
+        var settings = EditorSettings()
+        settings.guide = .manuscriptPaper
+        settings.fontSize = 16
+        #expect(settings.manuscriptCells(clipLength: 500, minimumLeading: 32, minimumTrailing: 32) == 27)
+        #expect(settings.lineInsets(clipLength: 500, minimumLeading: 32, minimumTrailing: 32) == (32, 36))
+
+        settings.usesReadableWidth = true
+        settings.readableWidth = .japaneseShort
+        #expect(settings.manuscriptCells(clipLength: 500, minimumLeading: 32, minimumTrailing: 32) == 20)
+        #expect(settings.lineInsets(clipLength: 500, minimumLeading: 32, minimumTrailing: 32) == (90, 90))
+        #expect(settings.manuscriptCells(clipLength: 200, minimumLeading: 32, minimumTrailing: 32) == 8)
+        #expect(settings.manuscriptCells(clipLength: 50, minimumLeading: 32, minimumTrailing: 32) == 1)
+    }
+
+    @Test
+    func keepsCrossInsetsWhileCellsFollowTheWindow() {
+        var settings = EditorSettings()
+        settings.guide = .manuscriptPaper
+        settings.fontSize = 16
+        func expansion(_ clipLength: CGFloat) -> CGFloat {
+            settings.crossInsetExpansion(clipLength: clipLength, minimumLeading: 32, minimumTrailing: 32)
+        }
+        #expect(expansion(650) == 0)
+
+        settings.usesReadableWidth = true
+        settings.readableWidth = .japaneseShort
+        let fullLength = CGFloat(32 + 32 + 20 * 16)
+        #expect(expansion(fullLength - 7) == 0)
+        #expect(expansion(fullLength + 40) == 10)
     }
 
     @Test

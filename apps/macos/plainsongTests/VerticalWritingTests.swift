@@ -273,8 +273,11 @@ struct VerticalWritingTests {
         textView.scrollRangeToVisible(range)
         let rect = textView.firstRect(forCharacterRange: range, actualRange: nil)
         let panel = NSPanel(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: true)
-        let panelFrame = NSRect(x: rect.minX - 10, y: rect.minY - 10, width: rect.width + 20, height: 120)
-        panel.setFrame(panelFrame, display: false)
+        panel.setFrame(
+            NSRect(x: rect.minX - 10, y: rect.minY - 10, width: rect.width + 20, height: 120),
+            display: false
+        )
+        let panelFrame = panel.frame
 
         editor.showFindResult(range, avoiding: panel)
 

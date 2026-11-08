@@ -2,7 +2,7 @@ import AppKit
 
 struct EditorSettings: Equatable {
     static let fontSizes: [CGFloat] = [12, 14, 16, 18, 21]
-    static let tabEms: CGFloat = 2
+    nonisolated static let tabEms: CGFloat = 2
 
     /// 下書きは、この設定に関係なく常に保存する
     nonisolated enum FileAutosave: String, CaseIterable {
@@ -38,6 +38,7 @@ struct EditorSettings: Equatable {
     var fontSize: CGFloat = 16
     var lineSpacing = LineSpacing.standard
     var orientation = Orientation.horizontal
+    var guide = Guide.blank
     var usesKerning = false
     var usesReadableWidth = false
     var readableWidth = ReadableWidth.standard
@@ -46,6 +47,7 @@ struct EditorSettings: Equatable {
     var showsWhitespace = false
     var whitespaceScope = WhitespaceScope.all
     var showsLineNumbers = false
+    var lineNumberUnit = LineNumberUnit.paragraph
     var addsParagraphSpacing = false
     var paragraphSpacing = ParagraphSpacing.halfLine
     var indentsParagraphs = false
@@ -71,12 +73,28 @@ struct EditorSettings: Equatable {
         statusBarItems.filter(\.isEnabled).map(\.kind)
     }
 
+    /// 原稿用紙で字送りを揃えるために和文のフォントへ差し替えると、その文字を含む行だけ高さの基準が変わり、マスからずれるので、本文全体を和文のフォントにする
+    var bodyFont: NSFont {
+        let font = fontFamily.font(ofSize: fontSize)
+        return showsManuscriptGuide ? EditorSettings.japaneseFont(for: font) : font
+    }
+
+    static func japaneseFont(for font: NSFont) -> NSFont {
+        CTFontCreateForString(font, "あ" as CFString, CFRange(location: 0, length: 1)) as NSFont
+    }
+
+    var manuscriptPaper: ManuscriptPaper {
+        ManuscriptPaper(indent: indentsParagraphs ? Int(paragraphIndent.ems) : 0)
+    }
+
     func paragraphStyle(lineHeight: CGFloat) -> NSParagraphStyle {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.minimumLineHeight = lineHeight
         paragraphStyle.maximumLineHeight = lineHeight
         paragraphStyle.lineSpacing = lineHeight * (lineSpacing.multiplier - 1)
-        paragraphStyle.paragraphSpacing = addsParagraphSpacing ? lineHeight * paragraphSpacing.lines : 0
+        paragraphStyle.paragraphSpacing = usesParagraphSpacing ? lineHeight * paragraphSpacing.lines : 0
+        // 原稿用紙の禁則は`ManuscriptPaper`が決めるので、TextKitの禁則や単語の折り返しを止める
+        paragraphStyle.lineBreakMode = showsManuscriptGuide ? .byCharWrapping : .byWordWrapping
         paragraphStyle.firstLineHeadIndent = indentsParagraphs ? fontSize * paragraphIndent.ems : 0
         // 標準のタブストップは28pt間隔で12個しかないので、空にして`defaultTabInterval`の間隔で並べる
         paragraphStyle.tabStops = []
@@ -88,6 +106,7 @@ struct EditorSettings: Equatable {
     private static let fontSizeKey = "fontSize"
     private static let lineSpacingKey = "lineSpacing"
     private static let orientationKey = "orientation"
+    private static let guideKey = "guide"
     private static let usesKerningKey = "usesKerning"
     private static let usesReadableWidthKey = "usesReadableWidth"
     private static let readableWidthKey = "readableWidth"
@@ -96,6 +115,7 @@ struct EditorSettings: Equatable {
     private static let showsWhitespaceKey = "showsWhitespace"
     private static let whitespaceScopeKey = "whitespaceScope"
     private static let showsLineNumbersKey = "showsLineNumbers"
+    private static let lineNumberUnitKey = "lineNumberUnit"
     private static let addsParagraphSpacingKey = "addsParagraphSpacing"
     private static let paragraphSpacingKey = "paragraphSpacing"
     private static let indentsParagraphsKey = "indentsParagraphs"
@@ -121,6 +141,7 @@ struct EditorSettings: Equatable {
         }
         settings.lineSpacing = defaults.value(forKey: lineSpacingKey, default: settings.lineSpacing)
         settings.orientation = defaults.value(forKey: orientationKey, default: settings.orientation)
+        settings.guide = defaults.value(forKey: guideKey, default: settings.guide)
         if let usesKerning = defaults.object(forKey: usesKerningKey) as? Bool {
             settings.usesKerning = usesKerning
         }
@@ -133,6 +154,7 @@ struct EditorSettings: Equatable {
         settings.showsWhitespace = defaults.bool(forKey: showsWhitespaceKey)
         settings.whitespaceScope = defaults.value(forKey: whitespaceScopeKey, default: settings.whitespaceScope)
         settings.showsLineNumbers = defaults.bool(forKey: showsLineNumbersKey)
+        settings.lineNumberUnit = defaults.value(forKey: lineNumberUnitKey, default: settings.lineNumberUnit)
         settings.addsParagraphSpacing = defaults.bool(forKey: addsParagraphSpacingKey)
         settings.paragraphSpacing = defaults.value(forKey: paragraphSpacingKey, default: settings.paragraphSpacing)
         settings.indentsParagraphs = defaults.bool(forKey: indentsParagraphsKey)
@@ -171,6 +193,7 @@ struct EditorSettings: Equatable {
         defaults.set(Double(fontSize), forKey: Self.fontSizeKey)
         defaults.set(lineSpacing.rawValue, forKey: Self.lineSpacingKey)
         defaults.set(orientation.rawValue, forKey: Self.orientationKey)
+        defaults.set(guide.rawValue, forKey: Self.guideKey)
         defaults.set(usesKerning, forKey: Self.usesKerningKey)
         defaults.set(usesReadableWidth, forKey: Self.usesReadableWidthKey)
         defaults.set(readableWidth.rawValue, forKey: Self.readableWidthKey)
@@ -179,6 +202,7 @@ struct EditorSettings: Equatable {
         defaults.set(showsWhitespace, forKey: Self.showsWhitespaceKey)
         defaults.set(whitespaceScope.rawValue, forKey: Self.whitespaceScopeKey)
         defaults.set(showsLineNumbers, forKey: Self.showsLineNumbersKey)
+        defaults.set(lineNumberUnit.rawValue, forKey: Self.lineNumberUnitKey)
         defaults.set(addsParagraphSpacing, forKey: Self.addsParagraphSpacingKey)
         defaults.set(paragraphSpacing.rawValue, forKey: Self.paragraphSpacingKey)
         defaults.set(indentsParagraphs, forKey: Self.indentsParagraphsKey)
@@ -420,8 +444,22 @@ extension EditorSettings {
         minimumLeading: CGFloat,
         minimumTrailing: CGFloat
     ) -> (leading: CGFloat, trailing: CGFloat) {
+        if showsManuscriptGuide, !usesReadableWidth {
+            let cells = manuscriptCells(
+                clipLength: clipLength,
+                minimumLeading: minimumLeading,
+                minimumTrailing: minimumTrailing
+            )
+            return (minimumLeading, clipLength - minimumLeading - fontSize * CGFloat(cells))
+        }
         guard usesReadableWidth else { return (minimumLeading, minimumTrailing) }
-        let maximumLength = fontSize * readableWidth.ems(in: orientation)
+        let maximumLength = showsManuscriptGuide
+            ? fontSize * CGFloat(manuscriptCells(
+                clipLength: clipLength,
+                minimumLeading: minimumLeading,
+                minimumTrailing: minimumTrailing
+            ))
+            : fontSize * readableWidth.ems(in: orientation)
         let centeringInset = ((clipLength - maximumLength) / 2).rounded(.down)
         if centeringInset >= max(minimumLeading, minimumTrailing) {
             return (centeringInset, centeringInset)
@@ -429,8 +467,27 @@ extension EditorSettings {
         return (minimumLeading, max(minimumTrailing, (clipLength - maximumLength - minimumLeading).rounded(.down)))
     }
 
-    func crossInsetExpansion(trailing: CGFloat, minimumTrailing: CGFloat) -> CGFloat {
-        min((trailing - minimumTrailing) / 2, fontSize * 4).rounded(.down)
+    func manuscriptCells(clipLength: CGFloat, minimumLeading: CGFloat, minimumTrailing: CGFloat) -> Int {
+        let fitting = max(Int((clipLength - minimumLeading - minimumTrailing) / fontSize), 1)
+        return usesReadableWidth ? min(Int(readableWidth.ems(in: orientation)), fitting) : fitting
+    }
+
+    /// 原稿用紙のマス数がウィンドウで決まるあいだ、行末の余白はマスに満たない端数で増減する。広げると、幅を変えるたびに本文とマス目が揺れる
+    func crossInsetExpansion(clipLength: CGFloat, minimumLeading: CGFloat, minimumTrailing: CGFloat) -> CGFloat {
+        if showsManuscriptGuide {
+            let cells = manuscriptCells(
+                clipLength: clipLength,
+                minimumLeading: minimumLeading,
+                minimumTrailing: minimumTrailing
+            )
+            guard usesReadableWidth, cells >= Int(readableWidth.ems(in: orientation)) else { return 0 }
+        }
+        let trailing = lineInsets(
+            clipLength: clipLength,
+            minimumLeading: minimumLeading,
+            minimumTrailing: minimumTrailing
+        ).trailing
+        return min((trailing - minimumTrailing) / 2, fontSize * 4).rounded(.down)
     }
 }
 

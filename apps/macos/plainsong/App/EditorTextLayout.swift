@@ -57,6 +57,13 @@ final nonisolated class LineHeightSegmentLayoutManager: NSTextLayoutManager {
         (isEmpty ? bounds.maxY - lineHeight : bounds.minY) + line.glyphOrigin.y
     }
 
+    /// 字面の中心。カーソルの帯の中心と同じ位置になる
+    func textMiddle(of line: NSTextLineFragment, in bounds: CGRect) -> CGFloat {
+        let characters = line.attributedString.attributedSubstring(from: line.characterRange).string
+        return verticalMiddle(of: line, in: bounds, isEmpty: characters.allSatisfy(\.isNewline))
+            - (textContainer?.layoutOrientation == .vertical ? 0 : japaneseMiddle)
+    }
+
     override func enumerateTextSegments(
         in textRange: NSTextRange,
         type: NSTextLayoutManager.SegmentType,
@@ -101,7 +108,7 @@ final nonisolated class ParagraphIndentRules: NSObject, NSTextContentStorageDele
     private static let openingBrackets = Set("「『（〔［｛〈《【〘〖〝｟⦅".utf16)
 
     /// 空白で始まる段落は、自分で字下げしたものとして二重に下げない
-    private static func indents(paragraphStartingWith character: unichar) -> Bool {
+    static func indents(paragraphStartingWith character: unichar) -> Bool {
         guard let scalar = Unicode.Scalar(character) else { return true }
         return !openingBrackets.contains(character) && !CharacterSet.whitespaces.contains(scalar)
     }
@@ -128,6 +135,32 @@ final nonisolated class ParagraphIndentRules: NSObject, NSTextContentStorageDele
         let paragraph = NSMutableAttributedString(attributedString: storage.attributedSubstring(from: range))
         paragraph.addAttribute(.paragraphStyle, value: flush, range: NSRange(location: 0, length: paragraph.length))
         return NSTextParagraph(attributedString: paragraph)
+    }
+}
+
+extension EditorWindowController {
+    /// TextKit 2が組む、行間を含まない1行の高さを求める
+    private static let metrics = NSLayoutManager()
+
+    /// 明朝体の欧文は文字サイズによって行の高さが1ptずれるので、フォントを切り替えても行送りが変わらないようゴシック体の高さに揃える
+    static func lineHeight(of settings: EditorSettings) -> CGFloat {
+        metrics.defaultLineHeight(for: EditorSettings.FontFamily.sansSerif.font(ofSize: settings.fontSize))
+    }
+
+    /// scrollableTextView()ではレイアウトマネージャーを差し替えられないので、同じ構成を自分で組む
+    static func makeTextView() -> (NSTextView, LineHeightSegmentLayoutManager) {
+        let layoutManager = LineHeightSegmentLayoutManager()
+        let contentStorage = TrailingNewlineContentStorage()
+        contentStorage.addTextLayoutManager(layoutManager)
+        contentStorage.delegate = ParagraphIndentRules.shared
+        let container = ManuscriptTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
+        container.widthTracksTextView = true
+        layoutManager.textContainer = container
+        let textView = NSTextView(frame: .zero, textContainer: container)
+        textView.autoresizingMask = [.width, .height]
+        textView.isVerticallyResizable = true
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        return (textView, layoutManager)
     }
 }
 

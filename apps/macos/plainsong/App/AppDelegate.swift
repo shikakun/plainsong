@@ -88,6 +88,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         settingsModel.update { $0.orientation = orientation }
     }
 
+    @objc func selectGuide(_ sender: NSMenuItem) {
+        guard let guide = sender.representedObject as? EditorSettings.Guide else { return }
+        settingsModel.update { $0.guide = guide }
+    }
+
     @objc func toggleSetting(_ sender: NSMenuItem) {
         guard let keyPath = sender.representedObject as? WritableKeyPath<EditorSettings, Bool> else { return }
         settingsModel.update { $0[keyPath: keyPath].toggle() }
@@ -121,9 +126,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             menuItem.state = menuItem.representedObject as? EditorSettings.Orientation == settings.orientation
                 ? .on
                 : .off
+        case #selector(selectGuide(_:)):
+            menuItem.state = menuItem.representedObject as? EditorSettings.Guide == settings.guide ? .on : .off
         case #selector(toggleSetting(_:)):
             guard let keyPath = menuItem.representedObject as? WritableKeyPath<EditorSettings, Bool> else { break }
             menuItem.state = settings[keyPath: keyPath] ? .on : .off
+            return settings.allowsToggling(keyPath)
         default:
             break
         }

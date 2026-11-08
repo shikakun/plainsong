@@ -88,7 +88,7 @@ final class ExtensionsSettingsPane: SettingsPane {
         switch kind {
         case .characterCount: content = CharacterCountOptionsView(model: model)
         case .wordCount: content = WordCountOptionsView(model: model)
-        case .fileEncoding, .lineEnding: return
+        case .manuscriptPages, .fileEncoding, .lineEnding: return
         }
         SettingsSheetController(title: kind.title, content: content).begin(for: window)
     }
