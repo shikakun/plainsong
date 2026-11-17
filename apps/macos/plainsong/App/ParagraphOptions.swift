@@ -14,6 +14,11 @@ final class ParagraphOptions: NSObject {
         action: nil
     )
     let indentButton = NSPopUpButton()
+    let hangingCheckbox = NSButton(
+        checkboxWithTitle: String(localized: "settings.hangsPunctuation"),
+        target: nil,
+        action: nil
+    )
 
     init(model: SettingsModel) {
         self.model = model
@@ -31,6 +36,9 @@ final class ParagraphOptions: NSObject {
         indentButton.target = self
         indentButton.action = #selector(changeParagraphIndent(_:))
         indentButton.setAccessibilityLabel(String(localized: "settings.paragraphIndent"))
+
+        hangingCheckbox.target = self
+        hangingCheckbox.action = #selector(changeHangsPunctuation(_:))
     }
 
     func update(with settings: EditorSettings) {
@@ -38,6 +46,7 @@ final class ParagraphOptions: NSObject {
         spacingButton.selectItem(for: settings.paragraphSpacing)
         indentCheckbox.state = settings.indentsParagraphs ? .on : .off
         indentButton.selectItem(for: settings.paragraphIndent)
+        hangingCheckbox.state = settings.hangsPunctuation ? .on : .off
     }
 
     @objc private func changeAddsParagraphSpacing(_ sender: NSButton) {
@@ -56,5 +65,9 @@ final class ParagraphOptions: NSObject {
     @objc private func changeParagraphIndent(_ sender: NSPopUpButton) {
         guard let paragraphIndent = sender.selectedCase(of: EditorSettings.ParagraphIndent.self) else { return }
         model.update { $0.paragraphIndent = paragraphIndent }
+    }
+
+    @objc private func changeHangsPunctuation(_ sender: NSButton) {
+        model.update { $0.hangsPunctuation = sender.state == .on }
     }
 }

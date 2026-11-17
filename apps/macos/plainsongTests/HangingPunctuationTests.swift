@@ -48,6 +48,19 @@ struct HangingPunctuationTests {
         #expect(lengths == Self.paragraphs.flatMap(\.lines))
     }
 
+    @Test
+    func pushesStopsOutWhenHangingIsOff() async {
+        let editor = await makeEditor(String(repeating: "あ", count: 20) + "。いう", orientation: .horizontal) {
+            $0.hangsPunctuation = false
+        }
+        var lengths: [Int] = []
+        editor.layoutManager.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) {
+            lengths += $0.textLineFragments.map(\.characterRange.length)
+            return true
+        }
+        #expect(lengths == [19, 4])
+    }
+
     @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical])
     func selectsTheHungStopWithoutStretchingOtherLines(orientation: EditorSettings.Orientation) async throws {
         let text = String(repeating: "あ", count: 20) + "。" + String(repeating: "い", count: 20) + "うえ"

@@ -32,6 +32,7 @@ nonisolated struct ManuscriptPaper: Equatable {
     private static let cellsPerTab = Int(EditorSettings.tabEms)
 
     var indent = 0
+    var hangsPunctuation = true
     var cellsPerLine = Self.standardCellsPerLine
 
     static func pages(forLines lines: Int) -> Int {
@@ -202,7 +203,7 @@ nonisolated struct ManuscriptPaper: Equatable {
         }
         end = max(end, start + 1)
         guard end < units.count else { return end }
-        if Self.canHang(at: end, in: units) {
+        if hangsPunctuation, Self.canHang(at: end, in: units) {
             return end + 1
         }
         var candidate = end

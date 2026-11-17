@@ -8,6 +8,10 @@ final nonisolated class EditorTextContainer: NSTextContainer {
     /// 原稿用紙では、行の字数を`ManuscriptPaper`で決める
     var paper: ManuscriptPaper?
 
+    var hangsPunctuation = true {
+        didSet { fitSize() }
+    }
+
     var cellWidth: CGFloat = 0 {
         didSet { fitSize() }
     }
@@ -18,7 +22,7 @@ final nonisolated class EditorTextContainer: NSTextContainer {
     }
 
     private func fitSize() {
-        let width = lineLength + cellWidth * Self.hangingEms
+        let width = lineLength + (hangsPunctuation ? cellWidth * Self.hangingEms : 0)
         if size.width != width {
             size = NSSize(width: width, height: size.height)
         }
@@ -50,7 +54,7 @@ final nonisolated class EditorTextContainer: NSTextContainer {
                 // 丸め誤差で最後の字が次の行に送られないよう、次の字が入らない範囲で余裕を持たせる
                 rect.size.width = (CGFloat(cells) + 0.25) * cellWidth
             }
-        } else if let width = hangingWidth(ofLineAt: characterIndex, in: storage, width: lineLength) {
+        } else if hangsPunctuation, let width = hangingWidth(ofLineAt: characterIndex, in: storage, width: lineLength) {
             rect.size.width = width
         }
         return rect

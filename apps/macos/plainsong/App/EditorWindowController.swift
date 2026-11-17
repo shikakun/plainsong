@@ -161,6 +161,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
             || settings.paragraphSpacing != previous?.paragraphSpacing
             || settings.indentsParagraphs != previous?.indentsParagraphs
             || settings.paragraphIndent != previous?.paragraphIndent
+            || settings.hangsPunctuation != previous?.hangsPunctuation
             || settings.usesReadableWidth != previous?.usesReadableWidth
             || settings.showsLineNumbers != previous?.showsLineNumbers
             || settings.guide != previous?.guide
@@ -171,6 +172,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
                     container.paper = nil
                 }
                 container.cellWidth = settings.fontSize
+                container.hangsPunctuation = settings.hangsPunctuation
             }
             applyFont(of: settings)
         }

@@ -52,6 +52,7 @@ struct EditorSettings: Equatable {
     var paragraphSpacing = ParagraphSpacing.halfLine
     var indentsParagraphs = false
     var paragraphIndent = ParagraphIndent.standard
+    var hangsPunctuation = true
     var theme = ThemeReference.standard
     var iconPlacement = IconPlacement.dock
     var fileAutosave = FileAutosave.backup
@@ -84,7 +85,7 @@ struct EditorSettings: Equatable {
     }
 
     var manuscriptPaper: ManuscriptPaper {
-        ManuscriptPaper(indent: indentsParagraphs ? Int(paragraphIndent.ems) : 0)
+        ManuscriptPaper(indent: indentsParagraphs ? Int(paragraphIndent.ems) : 0, hangsPunctuation: hangsPunctuation)
     }
 
     func paragraphStyle(lineHeight: CGFloat) -> NSParagraphStyle {
@@ -120,6 +121,7 @@ struct EditorSettings: Equatable {
     private static let paragraphSpacingKey = "paragraphSpacing"
     private static let indentsParagraphsKey = "indentsParagraphs"
     private static let paragraphIndentKey = "paragraphIndent"
+    private static let hangsPunctuationKey = "hangsPunctuation"
     private static let themeKey = "theme"
     private static let iconPlacementKey = "iconPlacement"
     private static let toolbarItemOrderKey = "toolbarItemOrder"
@@ -159,6 +161,9 @@ struct EditorSettings: Equatable {
         settings.paragraphSpacing = defaults.value(forKey: paragraphSpacingKey, default: settings.paragraphSpacing)
         settings.indentsParagraphs = defaults.bool(forKey: indentsParagraphsKey)
         settings.paragraphIndent = defaults.value(forKey: paragraphIndentKey, default: settings.paragraphIndent)
+        if let hangsPunctuation = defaults.object(forKey: hangsPunctuationKey) as? Bool {
+            settings.hangsPunctuation = hangsPunctuation
+        }
         if let theme = defaults.string(forKey: themeKey) {
             settings.theme = ThemeReference(rawValue: theme)
         }
@@ -207,6 +212,7 @@ struct EditorSettings: Equatable {
         defaults.set(paragraphSpacing.rawValue, forKey: Self.paragraphSpacingKey)
         defaults.set(indentsParagraphs, forKey: Self.indentsParagraphsKey)
         defaults.set(paragraphIndent.rawValue, forKey: Self.paragraphIndentKey)
+        defaults.set(hangsPunctuation, forKey: Self.hangsPunctuationKey)
         defaults.set(theme.rawValue, forKey: Self.themeKey)
         defaults.set(iconPlacement.rawValue, forKey: Self.iconPlacementKey)
         fileAutosave.save(to: defaults)

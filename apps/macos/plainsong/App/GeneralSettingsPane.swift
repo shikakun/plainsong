@@ -371,6 +371,7 @@ extension GeneralSettingsPane {
             [NSGridCell.emptyContentView, paragraphOptions.spacingButton],
             [NSGridCell.emptyContentView, paragraphOptions.indentCheckbox],
             [NSGridCell.emptyContentView, paragraphOptions.indentButton],
+            [NSGridCell.emptyContentView, paragraphOptions.hangingCheckbox],
             [NSGridCell.emptyContentView, readableWidthCheckbox],
             [NSGridCell.emptyContentView, readableWidthButton],
             [NSGridCell.emptyContentView, markdownCheckbox],

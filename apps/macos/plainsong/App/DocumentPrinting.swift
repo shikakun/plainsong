@@ -106,7 +106,7 @@ final class DocumentPrintView: NSView {
 
     /// ぶら下げた句読点が用紙の端で切れないよう行末に1字分を空け、余白を揃えるため行頭も同じだけ空ける
     private var lineStart: CGFloat {
-        settings.fontSize
+        settings.hangsPunctuation ? settings.fontSize : 0
     }
 
     private var pageCount: Int {
@@ -193,6 +193,7 @@ final class DocumentPrintView: NSView {
         let pageExtent = isVertical ? pageSize.width : pageSize.height
         if let container = textView.textContainer as? EditorTextContainer {
             container.cellWidth = settings.fontSize
+            container.hangsPunctuation = settings.hangsPunctuation
             container.lineLength = lineLength - lineStart * 2
         }
 
