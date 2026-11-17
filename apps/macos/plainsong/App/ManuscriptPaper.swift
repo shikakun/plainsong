@@ -31,13 +31,6 @@ nonisolated struct ManuscriptPaper: Equatable {
     static let linesPerPage = 20
     private static let cellsPerTab = Int(EditorSettings.tabEms)
 
-    private static let hanging = Set("、。".unicodeScalars)
-    /// stone_engineのSTKinsoku（MIT License, Copyright 2024 Nihon Design Center）に、全角の！，．：；とゝゞを足したもの
-    private static let notStarting = Set(
-        " ,.?:;!)）]］｝、〕〉》」』】〙〗〟’”｠»ヽヾゝゞァィゥェォッャュョヮヵヶぁぃぅぇぉっゃゅょゎゕゖㇰㇱㇲㇳㇴㇵㇶㇷㇸㇹㇺㇻㇼㇽㇾㇿ々〻？！，．：；‼⁇⁈⁉。.™".unicodeScalars
-    )
-    private static let notEnding = Set("(（[［｛〔〈《「『【〘〖〝‘“｟«\"'".unicodeScalars)
-
     var indent = 0
     var cellsPerLine = Self.standardCellsPerLine
 
@@ -122,7 +115,7 @@ nonisolated struct ManuscriptPaper: Equatable {
         var length = cellsPerLine * 3
         while true {
             let end = min(location + length, string.length)
-            let contentsEnd = (location ..< end).first { Self.isLineBreak(string.character(at: $0)) } ?? end
+            let contentsEnd = (location ..< end).first { LineBreakRules.isLineBreak(string.character(at: $0)) } ?? end
             let contents = NSRange(location: location, length: contentsEnd - location)
             let units = Self.units(of: contents, in: string)
             // 次の字とその次の字まで見れば、行の終わりが決まる
@@ -138,15 +131,7 @@ nonisolated struct ManuscriptPaper: Equatable {
 
     private func isParagraphStart(_ location: Int, in string: NSString) -> Bool {
         guard location > 0 else { return true }
-        return Self.isParagraphBreak(string.character(at: location - 1))
-    }
-
-    private static func isParagraphBreak(_ character: unichar) -> Bool {
-        character == 0x0A || character == 0x0D || character == 0x85 || character == 0x2029
-    }
-
-    private static func isLineBreak(_ character: unichar) -> Bool {
-        isParagraphBreak(character) || character == 0x2028
+        return LineBreakRules.isParagraphBreak(string.character(at: location - 1))
     }
 
     /// U+2028は段落を分けずに行を変えるので、そのあとの行は字下げしない
@@ -238,18 +223,13 @@ nonisolated struct ManuscriptPaper: Equatable {
         return unit.isZeroWidth ? 0 : 1
     }
 
-    /// 次の字も行頭に置けないときにぶら下げると、その字の行き場がなくなる
     private static func canHang(at index: Int, in units: [Unit]) -> Bool {
-        guard let scalar = units[index].scalar, hanging.contains(scalar) else { return false }
-        return index + 1 == units.count || !isNotStarting(units[index + 1])
+        LineBreakRules.canHang(units[index].scalar, before: index + 1 < units.count ? units[index + 1].scalar : nil)
     }
 
     private static func canBreak(before index: Int, in units: [Unit]) -> Bool {
-        guard !isNotStarting(units[index]), let previous = units[index - 1].scalar else { return false }
-        return !notEnding.contains(previous)
-    }
-
-    private static func isNotStarting(_ unit: Unit) -> Bool {
-        unit.scalar.map(notStarting.contains) ?? false
+        guard !LineBreakRules.isNotStarting(units[index].scalar), let previous = units[index - 1].scalar
+        else { return false }
+        return !LineBreakRules.isNotEnding(previous)
     }
 }
