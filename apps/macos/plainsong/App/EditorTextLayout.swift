@@ -74,6 +74,10 @@ final nonisolated class LineHeightSegmentLayoutManager: NSTextLayoutManager {
             super.enumerateTextSegments(in: textRange, type: type, options: options, using: block)
             return
         }
+        let lineLength = type == .selection && !textRange.isEmpty
+            ? (textContainer as? EditorTextContainer)?.lineLength
+            : nil
+        let glyphs = lineLength == nil ? [] : glyphFrames(in: textRange, options: options)
         super.enumerateTextSegments(in: textRange, type: type, options: options) { range, frame, baseline, container in
             let position = baselinePosition(of: frame) ?? frame.minY + baseline
             let middle = position - (container.layoutOrientation == .vertical ? 0 : japaneseMiddle)
@@ -81,8 +85,23 @@ final nonisolated class LineHeightSegmentLayoutManager: NSTextLayoutManager {
             band.size.height -= max(frame.height - lineHeight, 0)
             // 帯の端がにじまないよう、TextKitが組む行の位置と同じく整数にする
             band.origin.y = (middle - band.height / 2).rounded()
+            // 次の行へ続く選択範囲の帯はテキストコンテナの端まで伸び、ぶら下げる余地にかかるので、版面の端か、はみ出した字の端で止める
+            if let lineLength, band.maxX > lineLength {
+                let glyphEnd = glyphs.filter { frame.minY <= $0.midY && $0.midY <= frame.maxY }.map(\.maxX).max()
+                band.size.width = max(max(lineLength, glyphEnd ?? 0) - band.minX, 0)
+            }
             return block(range, band, position - band.minY, container)
         }
+    }
+
+    private func glyphFrames(in textRange: NSTextRange, options: NSTextLayoutManager.SegmentOptions) -> [CGRect] {
+        var frames: [CGRect] = []
+        let options = options.intersection([.rangeNotRequired, .upstreamAffinity])
+        super.enumerateTextSegments(in: textRange, type: .standard, options: options) { _, frame, _, _ in
+            frames.append(frame)
+            return true
+        }
+        return frames
     }
 
     /// 空の文書にはレイアウトフラグメントがない
@@ -113,7 +132,7 @@ final nonisolated class ParagraphIndentRules: NSObject, NSTextContentStorageDele
         return !openingBrackets.contains(character) && !CharacterSet.whitespaces.contains(scalar)
     }
 
-    private static func indents(paragraphAt location: Int, in storage: NSTextStorage) -> Bool {
+    static func indents(paragraphAt location: Int, in storage: NSTextStorage) -> Bool {
         let style = storage.attribute(.markdownStyle, at: location, effectiveRange: nil) as? Int ?? 0
         return indents(paragraphStartingWith: storage.mutableString.character(at: location))
             && !MarkdownSyntax.Style(rawValue: style).contains(.unindented)
@@ -153,8 +172,7 @@ extension EditorWindowController {
         let contentStorage = TrailingNewlineContentStorage()
         contentStorage.addTextLayoutManager(layoutManager)
         contentStorage.delegate = ParagraphIndentRules.shared
-        let container = ManuscriptTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
-        container.widthTracksTextView = true
+        let container = EditorTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
         layoutManager.textContainer = container
         let textView = NSTextView(frame: .zero, textContainer: container)
         textView.autoresizingMask = [.width, .height]
@@ -165,19 +183,12 @@ extension EditorWindowController {
 }
 
 extension NSTextView {
-    /// textContainerInsetは行頭と行末に同じ幅しか空けられないので、行末の余白はテキストコンテナの幅で決める
+    /// textContainerInsetは行頭と行末に同じ幅しか空けられないので、行末の余白は行の長さで決める
     /// 縦書きでもテキストコンテナの幅が行の長さになるので、clipLengthには行に使える高さを渡す
     /// ウィンドウの大きさを変えているあいだは何度も呼ばれるので、変わったときだけ渡す
     func setLineInsets(leading: CGFloat, trailing: CGFloat, clipLength: CGFloat) {
-        guard let textContainer else { return }
-        let tracksWidth = leading == trailing
-        if textContainer.widthTracksTextView != tracksWidth {
-            textContainer.widthTracksTextView = tracksWidth
-        }
-        let width = max(clipLength - leading - trailing, 0)
-        if textContainer.size.width != width {
-            textContainer.size = NSSize(width: width, height: textContainer.size.height)
-        }
+        guard let textContainer = textContainer as? EditorTextContainer else { return }
+        textContainer.lineLength = max(clipLength - leading - trailing, 0)
         let inset = NSSize(width: leading, height: LineHeightSegmentLayoutManager.bandOverhang)
         if textContainerInset != inset {
             textContainerInset = inset

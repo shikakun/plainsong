@@ -81,7 +81,7 @@ final class RuledLinesView: GuideLineView {
     override func draw(_: NSRect) {
         let visible = convert(bounds, to: textView)
         let start = textView.textContainerOrigin.x
-        let end = start + (textView.textContainer?.size.width ?? 0)
+        let end = start + ((textView.textContainer as? EditorTextContainer)?.lineLength ?? 0)
         let path = NSBezierPath()
         for position in rulePositions(in: visible.minY ... visible.maxY) {
             path.move(to: snapped(start, position))

@@ -1,38 +1,5 @@
 import AppKit
 
-/// 行の字数を`ManuscriptPaper`で決めるため、行ごとに幅を渡す。TextKitは渡した幅に入るだけの文字を組む
-final nonisolated class ManuscriptTextContainer: NSTextContainer {
-    var paper: ManuscriptPaper?
-    var cellWidth: CGFloat = 0
-
-    override var isSimpleRectangularTextContainer: Bool {
-        paper == nil && super.isSimpleRectangularTextContainer
-    }
-
-    override func lineFragmentRect(
-        forProposedRect proposedRect: CGRect,
-        at characterIndex: Int,
-        writingDirection: NSWritingDirection,
-        remaining: UnsafeMutablePointer<CGRect>?
-    ) -> CGRect {
-        var rect = super.lineFragmentRect(
-            forProposedRect: proposedRect,
-            at: characterIndex,
-            writingDirection: writingDirection,
-            remaining: remaining
-        )
-        guard let paper,
-              let storage = (textLayoutManager?.textContentManager as? NSTextContentStorage)?.textStorage
-        else { return rect }
-        let cells = paper.cells(ofLineAt: characterIndex, in: storage.mutableString)
-        if cells > 0 {
-            // 丸め誤差で最後の字が次の行に送られないよう、次の字が入らない範囲で余裕を持たせる
-            rect.size.width = (CGFloat(cells) + 0.25) * cellWidth
-        }
-        return rect
-    }
-}
-
 /// 本文の行は一定の間隔で並ぶので、マス目は本文を見ずに描ける
 final class ManuscriptGridView: GuideLineView {
     var cellSize: CGFloat = 0 {
@@ -98,7 +65,7 @@ extension EditorWindowController {
     /// ウィンドウの大きさを変えているあいだは何度も呼ばれるので、変わったときだけ組み直す
     func applyManuscriptCells(_ cells: Int, of settings: EditorSettings) {
         manuscriptGridView?.cellsPerLine = cells
-        guard let container = textView.textContainer as? ManuscriptTextContainer else { return }
+        guard let container = textView.textContainer as? EditorTextContainer else { return }
         var paper = settings.manuscriptPaper
         paper.cellsPerLine = cells
         guard paper != container.paper else { return }
