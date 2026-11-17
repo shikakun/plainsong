@@ -16,6 +16,7 @@ struct ManuscriptPaperTests {
     func hangsOnlyStopsThatLeaveTheNextLineValid() {
         #expect(lengths(filler(20) + "。いう") == [21, 2])
         #expect(lengths(filler(20) + "、") == [21])
+        #expect(lengths(filler(20) + "，いう") == [21, 2])
         // 閉じ括弧はぶら下げず、前の字ごと送る
         #expect(lengths(filler(20) + "」いう") == [19, 4])
         // 句点をぶら下げると、閉じ括弧が行頭にくる

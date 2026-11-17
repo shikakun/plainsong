@@ -2,7 +2,8 @@ import Foundation
 
 /// 原稿用紙と通常の表示で、同じ字をぶら下げる
 nonisolated enum LineBreakRules {
-    private static let hanging = Set("、。".unicodeScalars)
+    /// JLREQがぶら下げを認める句点類（cl-06）と読点類（cl-07）。半角の.,は欧文の行末にも現れるので、全角だけをぶら下げる
+    private static let hanging = Set("、。，．".unicodeScalars)
     /// stone_engineのSTKinsoku（MIT License, Copyright 2024 Nihon Design Center）に、全角の！，．：；とゝゞを足したもの
     private static let notStarting = Set(
         " ,.?:;!)）]］｝、〕〉》」』】〙〗〟’”｠»ヽヾゝゞァィゥェォッャュョヮヵヶぁぃぅぇぉっゃゅょゎゕゖㇰㇱㇲㇳㇴㇵㇶㇷㇸㇹㇺㇻㇼㇽㇾㇿ々〻？！，．：；‼⁇⁈⁉。.™".unicodeScalars
