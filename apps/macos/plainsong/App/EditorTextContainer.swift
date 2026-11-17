@@ -79,7 +79,7 @@ final nonisolated class EditorTextContainer: NSTextContainer {
                 Double(width - indent),
                 Double(indent)
             )
-            // 次の字とその次の字まで読めば、ぶら下げられるかが決まる
+            // 次の字とその次の字まで見れば、ぶら下げられるかが決まる
             if contentsEnd == end, end < string.length, fitting + 2 >= line.length {
                 length *= 2
                 continue
@@ -94,7 +94,7 @@ final nonisolated class EditorTextContainer: NSTextContainer {
                 CFRange(location: 0, length: NSMaxRange(hanging)),
                 Double(indent)
             )
-            // 測った幅ちょうどでは、丸め誤差でぶら下げた字が次の行に送られることがある。次の字が入らないよう、余裕はわずかにする
+            // 丸め誤差でぶら下げた字が次の行に送られないよう、次の字が入らない範囲で余裕を持たせる
             return indent + CGFloat(CTLineGetTypographicBounds(hung, nil, nil, nil)) + 0.5
         }
     }

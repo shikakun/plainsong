@@ -30,6 +30,15 @@ struct HangingPunctuationTests {
         return editor
     }
 
+    private func lineLengths(in editor: EditorWindowController) -> [Int] {
+        var lengths: [Int] = []
+        editor.layoutManager.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) {
+            lengths += $0.textLineFragments.map(\.characterRange.length)
+            return true
+        }
+        return lengths
+    }
+
     @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical], [false, true])
     func hangsStopsPastTheLineEnd(orientation: EditorSettings.Orientation, usesKerning: Bool) async {
         let text = Self.paragraphs.map(\.text).joined(separator: "\n")
@@ -40,12 +49,7 @@ struct HangingPunctuationTests {
             $0.paragraphIndent = .fullWidth
         }
 
-        var lengths: [Int] = []
-        editor.layoutManager.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) {
-            lengths += $0.textLineFragments.map(\.characterRange.length)
-            return true
-        }
-        #expect(lengths == Self.paragraphs.flatMap(\.lines))
+        #expect(lineLengths(in: editor) == Self.paragraphs.flatMap(\.lines))
     }
 
     @Test
@@ -53,12 +57,7 @@ struct HangingPunctuationTests {
         let editor = await makeEditor(String(repeating: "あ", count: 20) + "。いう", orientation: .horizontal) {
             $0.hangsPunctuation = false
         }
-        var lengths: [Int] = []
-        editor.layoutManager.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) {
-            lengths += $0.textLineFragments.map(\.characterRange.length)
-            return true
-        }
-        #expect(lengths == [19, 4])
+        #expect(lineLengths(in: editor) == [19, 4])
     }
 
     @Test(arguments: [EditorSettings.Orientation.horizontal, .vertical])
@@ -76,7 +75,6 @@ struct HangingPunctuationTests {
         #expect(line.characterRange.length == 21)
         let stopEnd = fragment.layoutFragmentFrame.minX + line.typographicBounds.minX
             + line.locationForCharacter(at: 21).x
-        // NSTextViewは、カーソルと選択範囲をテキストコンテナの外には描かない
         #expect(try stopEnd <= #require(editor.textView.textContainer).size.width)
 
         let content = try #require(layoutManager.textContentManager)
@@ -94,5 +92,9 @@ struct HangingPunctuationTests {
         try #require(bands.count == 3)
         #expect(bands[0].maxX == stopEnd)
         #expect(bands[1].maxX < stopEnd)
+        let secondLine = fragment.textLineFragments[1]
+        let secondEnd = fragment.layoutFragmentFrame.minX + secondLine.typographicBounds.minX
+            + secondLine.locationForCharacter(at: 41).x
+        #expect(secondEnd <= bands[1].maxX)
     }
 }
