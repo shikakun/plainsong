@@ -104,6 +104,11 @@ final class DocumentPrintView: NSView {
         settings.orientation == .vertical
     }
 
+    /// ぶら下げた句読点が用紙の端で切れないよう行末に1字分を空け、余白を揃えるため行頭も同じだけ空ける
+    private var lineStart: CGFloat {
+        settings.hangsPunctuation ? settings.fontSize : 0
+    }
+
     private var pageCount: Int {
         manuscriptGeometry == nil ? pages.count : manuscriptPages.count
     }
@@ -123,7 +128,6 @@ final class DocumentPrintView: NSView {
 
         layoutManager.delegate = fragments
         textView.textContainer?.lineFragmentPadding = 0
-        textView.textContainer?.widthTracksTextView = false
         textView.setLayoutOrientation(settings.orientation.layoutOrientation)
     }
 
@@ -187,7 +191,11 @@ final class DocumentPrintView: NSView {
 
         let lineLength = isVertical ? pageSize.height : pageSize.width
         let pageExtent = isVertical ? pageSize.width : pageSize.height
-        textView.textContainer?.size = NSSize(width: lineLength, height: CGFloat.greatestFiniteMagnitude)
+        if let container = textView.textContainer as? EditorTextContainer {
+            container.cellWidth = settings.fontSize
+            container.hangsPunctuation = settings.hangsPunctuation
+            container.lineLength = lineLength - lineStart * 2
+        }
 
         var page = Page(start: 0, lines: [])
         var pages: [Page] = []
@@ -298,7 +306,7 @@ final class DocumentPrintView: NSView {
         for placed in page.lines {
             draw(
                 placed,
-                at: CGPoint(x: placed.fragmentOrigin.x, y: placed.fragmentOrigin.y - page.start),
+                at: CGPoint(x: lineStart + placed.fragmentOrigin.x, y: placed.fragmentOrigin.y - page.start),
                 in: context
             )
         }

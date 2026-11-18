@@ -1648,6 +1648,22 @@
         }
       }
     },
+    "settings.hangsPunctuation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hang Punctuation at Line Ends"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "行末の句読点をぶら下げる"
+          }
+        }
+      }
+    },
     "settings.highlightsMarkdown" : {
       "localizations" : {
         "en" : {

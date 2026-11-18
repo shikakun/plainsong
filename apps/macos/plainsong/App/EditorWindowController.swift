@@ -12,7 +12,6 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     let markdownHighlighter: MarkdownHighlighter
     let typesetter: JapaneseTypesetter
     private var selectionObservation: (any NSObjectProtocol)?
-    private var clipViewFrameObservation: (any NSObjectProtocol)?
     /// ツールバーを含む高さ。全画面でタイトルバーが隠れても余白が変わらないよう、全画面のあいだは測り直さない
     private var titlebarHeight: CGFloat = 0
     private var titlebarObservation: NSKeyValueObservation?
@@ -69,6 +68,13 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         // クリップビューの自動調整を切ると、スクロールビューのcontentInsetsは反映されないので、クリップビューに直接指定する
         scrollView.automaticallyAdjustsContentInsets = false
         scrollView.contentView.automaticallyAdjustsContentInsets = false
+        // 行の長さはクリップビューの幅で決まる。スクロールバーの出し方を変えたときも幅が変わるので、ウィンドウではなくクリップビューを見張る
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(clipViewFrameDidChange(_:)),
+            name: NSView.frameDidChangeNotification,
+            object: scrollView.contentView
+        )
         Self.configure(textView)
         textView.delegate = self
         // NSTextViewが背景を塗ると、入力のたびに文書の高さ全体ぶんの描画バッファを確保してしまう
@@ -155,16 +161,18 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
             || settings.paragraphSpacing != previous?.paragraphSpacing
             || settings.indentsParagraphs != previous?.indentsParagraphs
             || settings.paragraphIndent != previous?.paragraphIndent
+            || settings.hangsPunctuation != previous?.hangsPunctuation
             || settings.usesReadableWidth != previous?.usesReadableWidth
             || settings.showsLineNumbers != previous?.showsLineNumbers
             || settings.guide != previous?.guide
         if typesettingChanged {
-            if let container = textView.textContainer as? ManuscriptTextContainer {
+            if let container = textView.textContainer as? EditorTextContainer {
                 // マス数はウィンドウの大きさで決まるので、`updateInsets()`で渡す
                 if !settings.showsManuscriptGuide {
                     container.paper = nil
                 }
                 container.cellWidth = settings.fontSize
+                container.hangsPunctuation = settings.hangsPunctuation
             }
             applyFont(of: settings)
         }
@@ -181,10 +189,6 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         applyLineNumbers(of: settings)
         applyManuscriptGrid(of: settings)
         applyRuledLines(of: settings)
-        observeClipViewFrame(
-            settings.usesReadableWidth || settings.showsManuscriptGuide
-                || settings.showsLineNumbers || settings.orientation == .vertical
-        )
         applyToolbar(of: settings)
         applyStatusBar(of: settings)
         updateInsets()
@@ -382,21 +386,8 @@ extension EditorWindowController {
         return true
     }
 
-    /// スクロールバーの出し方を変えたときも本文の幅が変わるので、ウィンドウではなくクリップビューを見張る
-    private func observeClipViewFrame(_ observes: Bool) {
-        if observes {
-            // ウィンドウの大きさが変わるのはメインスレッドだけなので、通知もメインスレッドで届く
-            clipViewFrameObservation = clipViewFrameObservation ?? NotificationCenter.default.addObserver(
-                forName: NSView.frameDidChangeNotification,
-                object: scrollView.contentView,
-                queue: nil
-            ) { [weak self] _ in
-                MainActor.assumeIsolated { self?.updateInsets() }
-            }
-        } else if let clipViewFrameObservation {
-            NotificationCenter.default.removeObserver(clipViewFrameObservation)
-            self.clipViewFrameObservation = nil
-        }
+    @objc private func clipViewFrameDidChange(_: Notification) {
+        updateInsets()
     }
 
     /// ステータスバーの項目と歯車のアイコンを、本文の左右の端に揃える

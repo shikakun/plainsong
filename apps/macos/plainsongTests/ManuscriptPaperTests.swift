@@ -24,6 +24,12 @@ struct ManuscriptPaperTests {
     }
 
     @Test
+    func pushesStopsOutWhenHangingIsOff() {
+        let paper = ManuscriptPaper(hangsPunctuation: false)
+        #expect(paper.lines(in: (filler(20) + "。いう") as NSString).map(\.length) == [19, 4])
+    }
+
+    @Test
     func keepsProhibitedCharactersAwayFromLineEdges() {
         #expect(lengths(filler(19) + "「いう」") == [19, 4])
         #expect(lengths(filler(20) + "ゃいう") == [19, 4])

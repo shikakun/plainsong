@@ -52,6 +52,7 @@ struct EditorSettings: Equatable {
     var paragraphSpacing = ParagraphSpacing.halfLine
     var indentsParagraphs = false
     var paragraphIndent = ParagraphIndent.standard
+    var hangsPunctuation = true
     var theme = ThemeReference.standard
     var iconPlacement = IconPlacement.dock
     var fileAutosave = FileAutosave.backup
@@ -84,7 +85,7 @@ struct EditorSettings: Equatable {
     }
 
     var manuscriptPaper: ManuscriptPaper {
-        ManuscriptPaper(indent: indentsParagraphs ? Int(paragraphIndent.ems) : 0)
+        ManuscriptPaper(indent: indentsParagraphs ? Int(paragraphIndent.ems) : 0, hangsPunctuation: hangsPunctuation)
     }
 
     func paragraphStyle(lineHeight: CGFloat) -> NSParagraphStyle {
@@ -120,6 +121,7 @@ struct EditorSettings: Equatable {
     private static let paragraphSpacingKey = "paragraphSpacing"
     private static let indentsParagraphsKey = "indentsParagraphs"
     private static let paragraphIndentKey = "paragraphIndent"
+    private static let hangsPunctuationKey = "hangsPunctuation"
     private static let themeKey = "theme"
     private static let iconPlacementKey = "iconPlacement"
     private static let toolbarItemOrderKey = "toolbarItemOrder"
@@ -159,6 +161,9 @@ struct EditorSettings: Equatable {
         settings.paragraphSpacing = defaults.value(forKey: paragraphSpacingKey, default: settings.paragraphSpacing)
         settings.indentsParagraphs = defaults.bool(forKey: indentsParagraphsKey)
         settings.paragraphIndent = defaults.value(forKey: paragraphIndentKey, default: settings.paragraphIndent)
+        if let hangsPunctuation = defaults.object(forKey: hangsPunctuationKey) as? Bool {
+            settings.hangsPunctuation = hangsPunctuation
+        }
         if let theme = defaults.string(forKey: themeKey) {
             settings.theme = ThemeReference(rawValue: theme)
         }
@@ -207,6 +212,7 @@ struct EditorSettings: Equatable {
         defaults.set(paragraphSpacing.rawValue, forKey: Self.paragraphSpacingKey)
         defaults.set(indentsParagraphs, forKey: Self.indentsParagraphsKey)
         defaults.set(paragraphIndent.rawValue, forKey: Self.paragraphIndentKey)
+        defaults.set(hangsPunctuation, forKey: Self.hangsPunctuationKey)
         defaults.set(theme.rawValue, forKey: Self.themeKey)
         defaults.set(iconPlacement.rawValue, forKey: Self.iconPlacementKey)
         fileAutosave.save(to: defaults)
@@ -426,68 +432,6 @@ extension EditorSettings {
             case .both: String(localized: "settings.iconPlacement.both")
             }
         }
-    }
-}
-
-extension EditorSettings {
-    /// 本文の左右の余白の最小値。行番号を出すときは、左だけこの2倍にして番号を置く
-    var minimumInset: CGFloat {
-        fontSize * 2
-    }
-
-    var lineNumberGutter: CGFloat {
-        minimumInset * 2
-    }
-
-    func lineInsets(
-        clipLength: CGFloat,
-        minimumLeading: CGFloat,
-        minimumTrailing: CGFloat
-    ) -> (leading: CGFloat, trailing: CGFloat) {
-        if showsManuscriptGuide, !usesReadableWidth {
-            let cells = manuscriptCells(
-                clipLength: clipLength,
-                minimumLeading: minimumLeading,
-                minimumTrailing: minimumTrailing
-            )
-            return (minimumLeading, clipLength - minimumLeading - fontSize * CGFloat(cells))
-        }
-        guard usesReadableWidth else { return (minimumLeading, minimumTrailing) }
-        let maximumLength = showsManuscriptGuide
-            ? fontSize * CGFloat(manuscriptCells(
-                clipLength: clipLength,
-                minimumLeading: minimumLeading,
-                minimumTrailing: minimumTrailing
-            ))
-            : fontSize * readableWidth.ems(in: orientation)
-        let centeringInset = ((clipLength - maximumLength) / 2).rounded(.down)
-        if centeringInset >= max(minimumLeading, minimumTrailing) {
-            return (centeringInset, centeringInset)
-        }
-        return (minimumLeading, max(minimumTrailing, (clipLength - maximumLength - minimumLeading).rounded(.down)))
-    }
-
-    func manuscriptCells(clipLength: CGFloat, minimumLeading: CGFloat, minimumTrailing: CGFloat) -> Int {
-        let fitting = max(Int((clipLength - minimumLeading - minimumTrailing) / fontSize), 1)
-        return usesReadableWidth ? min(Int(readableWidth.ems(in: orientation)), fitting) : fitting
-    }
-
-    /// 原稿用紙のマス数がウィンドウで決まるあいだ、行末の余白はマスに満たない端数で増減する。広げると、幅を変えるたびに本文とマス目が揺れる
-    func crossInsetExpansion(clipLength: CGFloat, minimumLeading: CGFloat, minimumTrailing: CGFloat) -> CGFloat {
-        if showsManuscriptGuide {
-            let cells = manuscriptCells(
-                clipLength: clipLength,
-                minimumLeading: minimumLeading,
-                minimumTrailing: minimumTrailing
-            )
-            guard usesReadableWidth, cells >= Int(readableWidth.ems(in: orientation)) else { return 0 }
-        }
-        let trailing = lineInsets(
-            clipLength: clipLength,
-            minimumLeading: minimumLeading,
-            minimumTrailing: minimumTrailing
-        ).trailing
-        return min((trailing - minimumTrailing) / 2, fontSize * 4).rounded(.down)
     }
 }
 
