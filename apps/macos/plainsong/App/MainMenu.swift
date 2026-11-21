@@ -52,6 +52,7 @@ enum MainMenu {
             item("menu.about", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
             .separator(),
             settingsItem(),
+            commandLineToolItem(),
             .separator(),
             item("menu.hide", #selector(NSApplication.hide(_:)), key: "h"),
             item(
@@ -195,6 +196,12 @@ enum MainMenu {
     static func settingsItem() -> NSMenuItem {
         let item = item("menu.settings", #selector(AppDelegate.showSettings(_:)), key: ",")
         item.image = NSImage(systemSymbolName: "gear", accessibilityDescription: nil)
+        return item
+    }
+
+    private static func commandLineToolItem() -> NSMenuItem {
+        let item = item("menu.commandLineTool", #selector(AppDelegate.showCommandLineTool(_:)))
+        item.image = NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)
         return item
     }
 
