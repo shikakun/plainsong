@@ -25,12 +25,11 @@ enum CommandLineTool {
     }
 }
 
-/// songコマンドのインストールとアンインストールを案内するウィンドウ
 final class CommandLineToolWindowController: NSWindowController {
     convenience init() {
         let window = NSWindow(contentViewController: CommandLineToolViewController())
         window.styleMask = [.titled, .closable, .fullSizeContentView]
-        // タイトルは画面に出さず、ウインドウメニューとVoiceOverで使う
+        // タイトルは画面に出さないが、VoiceOverの読み上げとウインドウメニューに使われる
         window.title = String(localized: "commandLineTool.title")
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
