@@ -34,7 +34,6 @@ struct ExtensionItem<Kind: ExtensionItemKind>: Equatable {
         return order(saved: kinds(forKey: orderKey)).map { Self(kind: $0, isEnabled: enabled.contains($0)) }
     }
 
-    /// 並びを保存したあとに増えた項目は、`allCases`で1つ前にある項目のすぐ後ろに入れる
     static func order(saved: [Kind]) -> [Kind] {
         var order = saved
         var previous: Kind?

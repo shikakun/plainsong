@@ -3,8 +3,7 @@ import AppKit
 extension EditorWindowController {
     private static let frameName = "Editor"
 
-    /// ほかのウィンドウが出ていれば、少しずらして重ねる。状態を復元するときは、あとから元の位置と大きさになる
-    /// 大きさは、最後に大きさを変えたか閉じたウィンドウに合わせる。残した位置は使わない
+    /// 状態を復元するときは、あとから元の位置と大きさになる
     func place() {
         guard let window else { return }
         window.setFrameUsingName(Self.frameName)
@@ -24,7 +23,7 @@ extension EditorWindowController {
         saveFrame()
     }
 
-    /// ウィンドウはいくつも開くので、`frameAutosaveName`は使えない。全画面のあいだは画面の大きさになっているので残さない
+    /// ウィンドウはいくつも開くので、`frameAutosaveName`は使えない
     private func saveFrame() {
         guard let window, !window.styleMask.contains(.fullScreen) else { return }
         window.saveFrame(usingName: Self.frameName)

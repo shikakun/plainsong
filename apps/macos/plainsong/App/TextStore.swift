@@ -2,13 +2,7 @@ import AppKit
 
 /// 書いた内容を、アプリが落ちても失わないように保存する
 ///
-/// 編集のたびに差分をジャーナルへ追記し、アプリが手前から外れたときに、全文をスナップショットへまとめる。
 /// 追記はカーネルに渡した時点で、アプリが落ちても残る。Macごと落ちたときに備えて、入力が止まったらディスクまで書き出す。
-/// 終了したときもジャーナルに残るので、次に起動したときに再生する。
-///
-/// ジャーナルは、元にしたスナップショットのハッシュ（UInt64）のあとにレコードが続く。
-/// レコードは、チェックサム、置き換えた位置、消した長さ、入れた長さ（それぞれUInt32）と、入れた文字列からなる。
-/// 位置と長さは`NSString`と同じUTF-16の単位で数え、文字列もUTF-16のまま持つ。
 final class TextStore: NSObject, NSTextStorageDelegate {
     static let snapshotName = "text.txt"
     static let journalName = "journal"
@@ -20,7 +14,6 @@ final class TextStore: NSObject, NSTextStorageDelegate {
     private var journal: FileHandle?
     private weak var storage: NSTextStorage?
     private var hasRecords = false
-    /// ジャーナルへの追記に失敗したら、次の機会に全文を書き直す
     private var needsSave = false
     private var lastEdit = ContinuousClock.now
     private var flushTask: Task<Void, Never>?
@@ -61,7 +54,6 @@ final class TextStore: NSObject, NSTextStorageDelegate {
                 validEnd = Self.headerSize
             }
             let journal = try FileHandle(forWritingTo: journalURL)
-            // 書いている途中で落ちて切れたレコードを捨て、続きをそこから書く
             try journal.truncate(atOffset: UInt64(validEnd))
             self.journal = journal
         } catch {
@@ -179,7 +171,7 @@ final class TextStore: NSObject, NSTextStorageDelegate {
         return record
     }
 
-    /// 壊れたレコードがあれば、そこで止める。返すのは、正しく読めたところまでのバイト数
+    /// 返すのは、正しく読めたところまでのバイト数
     private static func replay(_ journal: Data, onto text: NSMutableString) -> Int {
         journal.withUnsafeBytes { bytes in
             var offset = headerSize

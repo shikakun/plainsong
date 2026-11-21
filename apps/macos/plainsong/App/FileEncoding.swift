@@ -2,7 +2,7 @@ import Foundation
 
 nonisolated struct FileEncoding: Equatable {
     static let utf8 = FileEncoding(encoding: .utf8, hasByteOrderMark: false)
-    /// テキストエディットなどがファイルに付ける、文字コードの拡張属性。値は「SHIFT_JIS;2561」のように、IANAの名前とCFStringEncodingの値を並べたもの
+    /// テキストエディットなどがファイルに付ける、文字コードの拡張属性
     private static let attributeName = "com.apple.TextEncoding"
     private static let suggestions: [String.Encoding] = [.shiftJIS, .japaneseEUC, .iso2022JP, .utf16]
 
@@ -48,7 +48,7 @@ nonisolated struct FileEncoding: Equatable {
         return data.map { byteOrderMark + $0 }
     }
 
-    /// UTF-8のファイルには付けない。ほかの文字コードは、NSDocumentが保存するたびに属性を消すので、付け直さないと次に開いたときに推測が外れることがある
+    /// NSDocumentが保存するたびに属性を消すので、付け直さないと次に開いたときに推測が外れることがある
     private var attributeValue: Data? {
         guard encoding != .utf8, let ianaName else { return nil }
         return Data("\(ianaName);\(cfEncoding)".utf8)

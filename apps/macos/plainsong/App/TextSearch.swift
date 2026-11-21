@@ -80,7 +80,6 @@ nonisolated extension TextSearch {
     private static let matchesWidthKey = "findMatchesWidth"
     private static let usesRegularExpressionKey = "findUsesRegularExpression"
 
-    /// 検索語は検索用ペーストボードでほかのアプリと共有するので、ここには保存しない
     static func load(from defaults: UserDefaults) -> TextSearch {
         TextSearch(
             matchesCase: defaults.bool(forKey: matchesCaseKey),

@@ -1,6 +1,5 @@
 import Foundation
 
-/// 表示言語
 enum AppLanguage: CaseIterable {
     case system
     case english

@@ -54,7 +54,6 @@ nonisolated enum UprightGlyphs {
         return runs
     }
 
-    /// 原稿用紙では、マスに揃うよう字送りが1字分でない文字をすべて差し替える
     static func manuscriptRuns(in string: NSString, range: NSRange, isVertical: Bool, font: NSFont) -> [Run] {
         var pairs = runs(in: string, range: range).filter { $0.kind == .tateChuYoko }[...]
         var result: [Run] = []

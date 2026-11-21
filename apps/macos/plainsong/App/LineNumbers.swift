@@ -14,7 +14,7 @@ extension EditorSettings {
     }
 }
 
-/// 本文の行頭の側の余白に重ねる。描くのは見えている行だけ
+/// 描くのは見えている行だけ
 final class LineNumberView: NSView {
     private let textView: NSTextView
     /// 前回描いたときの、先頭の段落の位置と行番号。そこから数えれば、文書の先頭から数え直さずに済む
@@ -36,7 +36,7 @@ final class LineNumberView: NSView {
         [.font: font, .foregroundColor: NSColor.secondaryLabelColor]
     }
 
-    /// 本文の文字サイズ。行番号は1段階小さいサイズにし、いちばん小さいサイズでは同じにする
+    /// 本文の文字サイズ
     var fontSize: CGFloat = 0 {
         didSet {
             guard fontSize != oldValue else { return }
@@ -78,7 +78,7 @@ final class LineNumberView: NSView {
         nil
     }
 
-    /// U+2028とU+2029は、TextKit 2では段落を分けずに段落の中で行を変える。\r\nは1つと数える
+    /// U+2028とU+2029は、TextKit 2では段落を分けずに段落の中で行を変える
     nonisolated static func lineBreakCount(in string: NSString, range: NSRange) -> Int {
         var count = 0
         var previous: unichar = 0
@@ -235,7 +235,6 @@ final class LineNumberView: NSView {
         }
     }
 
-    /// 数字の高さの中央を、本文の行の高さの中央に揃える
     private func drawNumber(_ number: Int, baseline: CGFloat, bodyFont: NSFont) {
         let string = String(number) as NSString
         let attributes = attributes

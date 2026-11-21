@@ -1,7 +1,6 @@
 import Foundation
 
 extension EditorSettings {
-    /// 本文の左右の余白の最小値。行番号を出すときは、左だけこの2倍にして番号を置く
     var minimumInset: CGFloat {
         fontSize * 2
     }

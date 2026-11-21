@@ -9,7 +9,6 @@ final class DocumentController: NSDocumentController {
         documents.flatMap(\.windowControllers).compactMap { $0 as? EditorWindowController }
     }
 
-    /// 下書きはファイルを持たないので、ウィンドウの状態に残した下書きのIDから開き直す
     override static func restoreWindow(
         withIdentifier identifier: NSUserInterfaceItemIdentifier,
         state: NSCoder,

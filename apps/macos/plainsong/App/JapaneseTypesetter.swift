@@ -13,7 +13,6 @@ final class JapaneseTypesetter {
         self.textView = textView
     }
 
-    /// 0を指定すると、欧文のカーニングに加えて、和文の約物の詰めと和欧間の空きも止まる
     private var baseKern: NSNumber? {
         usesKerning ? nil : 0
     }

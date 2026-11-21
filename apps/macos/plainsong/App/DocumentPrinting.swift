@@ -6,7 +6,6 @@ private enum PrintedGuideLine {
         (value * 2).rounded(.down) / 2
     }
 
-    /// 画面の線の濃さ（文字色の18%）を白い紙の上で再現する
     static func strokePath(in context: CGContext) {
         context.setStrokeColor(NSColor(white: 0.82, alpha: 1).cgColor)
         context.setLineWidth(0.5)
@@ -30,7 +29,6 @@ private struct ManuscriptPageGeometry {
 
     init(lineLength: CGFloat, crossLength: CGFloat) {
         let columns = CGFloat(Self.columns)
-        // ぶら下げる句読点の分を、行の方向に1マス空ける
         let cellsPerLine = CGFloat(ManuscriptPaper.standardCellsPerLine + 1)
         cell = PrintedGuideLine.snapped(min(lineLength / cellsPerLine, crossLength / (columns * Self.pitchRatio)))
         pitch = PrintedGuideLine.snapped(cell * Self.pitchRatio)
@@ -242,7 +240,6 @@ final class DocumentPrintView: NSView {
         layoutManager.enumerateTextLayoutFragments(from: nil, options: [.ensuresLayout]) { fragment in
             guard let paragraph = (fragment.textElement as? NSTextParagraph)?.attributedString else { return true }
             let origin = fragment.layoutFragmentFrame.origin
-            // 末尾の改行のあとの空の行だけのページを作らない
             lines += fragment.textLineFragments.filter { $0.characterRange.length > 0 }.map {
                 PlacedLine(line: $0, fragmentOrigin: origin, paragraph: paragraph)
             }

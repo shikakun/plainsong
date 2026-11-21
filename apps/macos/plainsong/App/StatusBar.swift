@@ -380,7 +380,7 @@ private final class CountField<Counter: StatusBarCounter>: StatusBarField {
         scheduleCount()
     }
 
-    /// 編集の途中では変換中の文字の状態が定まらないので、編集を終えてから数える。1回の操作で何度編集されたり選択が変わったりしても、数えるのは1回にする
+    /// 編集の途中では変換中の文字の状態が定まらないので、編集を終えてから数える
     private func scheduleCount() {
         guard !isCountScheduled else { return }
         isCountScheduled = true
@@ -390,7 +390,6 @@ private final class CountField<Counter: StatusBarCounter>: StatusBarField {
         }
     }
 
-    /// 変換中の読みがなで数が増減しないよう、確定するまでは数え直さない
     private func count() {
         guard let textView, !textView.hasMarkedText(), let storage = textView.textStorage else { return }
         let string = storage.mutableString

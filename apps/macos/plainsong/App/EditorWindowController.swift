@@ -12,7 +12,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
     let markdownHighlighter: MarkdownHighlighter
     let typesetter: JapaneseTypesetter
     private var selectionObservation: (any NSObjectProtocol)?
-    /// ツールバーを含む高さ。全画面でタイトルバーが隠れても余白が変わらないよう、全画面のあいだは測り直さない
+    /// ツールバーを含む高さ
     private var titlebarHeight: CGFloat = 0
     private var titlebarObservation: NSKeyValueObservation?
     private var settings: EditorSettings?
@@ -107,7 +107,6 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         preconditionFailure("init(coder:) is not supported")
     }
 
-    /// 下書きのタイトルは見せないが、VoiceOverやウインドウメニューで読まれる。ファイルは、ファイル名とプロキシアイコンを見せる
     /// ファイルの名前が変わるたびに呼ばれるので、MDXかどうかもここで決め直す
     override func synchronizeWindowTitleWithDocumentName() {
         super.synchronizeWindowTitleWithDocumentName()
@@ -195,7 +194,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         textView.scrollRangeToVisible(textView.selectedRange())
     }
 
-    /// 本文全体を1回の編集で書き換える。属性の変更なので、TextStoreは記録せず、取り消しの履歴にも入らない
+    /// 本文全体を1回の編集で書き換える
     private func applyFont(of settings: EditorSettings) {
         let bodyFont = settings.fontFamily.font(ofSize: settings.fontSize)
         let lineHeight = Self.lineHeight(of: settings)
@@ -216,7 +215,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
-    /// 文字の色は、本文全体と入力する文字の属性を書き換える。TextStoreは記録せず、取り消しの履歴にも入らない
+    /// 文字の色は、本文全体と入力する文字の属性を書き換える
     private func applyTheme(_ theme: Theme?) {
         self.theme = theme
         editorWindow.appearance = theme?.appearance
@@ -280,7 +279,6 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         redrawText()
     }
 
-    /// カーソルを動かしただけなら何もしない
     private func selectionDidChange() {
         let ranges = textView.nonEmptySelectedRanges
         guard ranges != whitespaceMarkers.selectedRanges else { return }
@@ -390,7 +388,6 @@ extension EditorWindowController {
         updateInsets()
     }
 
-    /// ステータスバーの項目と歯車のアイコンを、本文の左右の端に揃える
     private func updateInsets() {
         guard let settings else { return }
         let fontSize = settings.fontSize

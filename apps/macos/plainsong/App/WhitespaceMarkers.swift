@@ -19,7 +19,6 @@ final nonisolated class WhitespaceMarkers: NSObject, NSTextLayoutManagerDelegate
     }
 
     /// rangeの中で記号を描く空白を探し、string（段落）の中での位置を返す。selectedRangesもstringの中の範囲で渡す
-    /// ここでの行末は改行の直前か段落の末尾で、折り返した位置は行末としない
     static func whitespaceIndices(
         in string: NSString,
         range: NSRange,

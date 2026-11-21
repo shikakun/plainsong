@@ -1,6 +1,5 @@
 import Foundation
 
-/// ファイルの改行コード。本文は読み込んだときの改行をそのまま持ち、保存するときに、いちばん多い改行コードにそろえる
 /// 改行はどれもASCIIの文字なので、UTF-8のバイト列のまま数える
 nonisolated enum LineEnding: String {
     case lf = "\n"
@@ -15,7 +14,6 @@ nonisolated enum LineEnding: String {
         }
     }
 
-    /// いちばん多い改行コードと、ほかの改行コードが混ざっているかを返す。\nと同じ数なら\nにする
     static func detect(in string: String) -> (lineEnding: LineEnding, isMixed: Bool) {
         var string = string
         let counts = string.withUTF8(Counts.init)

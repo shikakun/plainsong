@@ -4,7 +4,6 @@ struct EditorSettings: Equatable {
     static let fontSizes: [CGFloat] = [12, 14, 16, 18, 21]
     nonisolated static let tabEms: CGFloat = 2
 
-    /// 下書きは、この設定に関係なく常に保存する
     nonisolated enum FileAutosave: String, CaseIterable {
         case off
         case backup
@@ -57,7 +56,7 @@ struct EditorSettings: Equatable {
     var iconPlacement = IconPlacement.dock
     var fileAutosave = FileAutosave.backup
     var toolbarItems = ExtensionItem<ToolbarItemKind>.defaults
-    /// 選択していても全文を対象にする項目。例外として持つので、あとから増えた項目は、はじめは選択したテキストを対象にする
+    /// 例外として持つので、あとから増えた項目は、はじめは選択したテキストを対象にする
     var toolbarItemsIgnoringSelection: Set<ToolbarItemKind> = []
     var toolbarFindOpensReplace = false
     var showsStatusBarSettingsButton = true
@@ -304,7 +303,6 @@ extension EditorSettings {
         case standard
         case relaxed
 
-        /// 行間を含まない1行の高さに対する、行送りの倍率
         var multiplier: CGFloat {
             switch self {
             case .compact: 1

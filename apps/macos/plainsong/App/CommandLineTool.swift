@@ -28,7 +28,6 @@ final class CommandLineToolWindowController: NSWindowController {
     convenience init() {
         let window = NSWindow(contentViewController: CommandLineToolViewController())
         window.styleMask = [.titled, .closable, .fullSizeContentView]
-        // タイトルは画面に出さないが、VoiceOverの読み上げとウインドウメニューに使われる
         window.title = String(localized: "commandLineTool.title")
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
@@ -150,7 +149,6 @@ private final class CommandLineToolViewController: NSViewController {
         let width = button.fittingSize.width
         button.title = String(localized: "commandLineTool.copy")
         button.widthAnchor.constraint(equalToConstant: max(width, button.fittingSize.width)).isActive = true
-        // 2つのボタンの名前が同じなので、VoiceOverではどちらのコマンドかを添える
         button.setAccessibilityLabel(String(localized: "commandLineTool.copy \(title)"))
         commands[button] = command
 
