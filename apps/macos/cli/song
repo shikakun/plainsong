@@ -23,7 +23,6 @@ fail() {
   exit "${2:-1}"
 }
 
-# /usr/local/binなどのリンクから呼ばれるので、たどった先のPlainsong.app/Contents/SharedSupport/bin/songからアプリを求める
 app=$(realpath "$0")
 app=${app%/Contents/SharedSupport/bin/*}
 
@@ -50,7 +49,6 @@ Run 'song --help' for usage." 2
         ;;
     esac
   fi
-  # openは-で始まる引数をオプションとして読むので、パスに見える形にする
   case $arg in
     -*) arg=./$arg ;;
   esac
@@ -63,10 +61,9 @@ Run 'song --help' for usage." 2
   set -- "$@" "$arg"
 done
 
-# サンドボックスのアプリは、ユーザーが選んでいない場所にファイルを作れない。開く前に、ここで作っておく
 for file do
   if [ ! -e "$file" ]; then
-    : >"$file"
+    : 2>/dev/null >"$file" || fail "can't create a file: $file"
   fi
 done
 
