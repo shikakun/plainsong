@@ -1,5 +1,15 @@
 # macos
 
+## 1.5.0
+
+日本語の行末の句読点を行の外に配置する、いわゆる「ぶら下げ」ができるようになりました。句読点の前の字が次の行に送られず、行の長さが揃って読みやすくなります。  
+このレイアウトが執筆の集中を妨げる場合は、設定の「行末の句読点をぶら下げる」オプションでオフにできます。  
+また、コマンドラインツールのsongコマンドを利用できるようになりました。詳しくは、メニューの「コマンドラインツール」を参照ください。
+
+Japanese commas and periods at the end of a line can now extend into the margin, a technique known as hanging punctuation. The character before them is no longer pushed to the next line, so line lengths stay even and your writing is easier to read.  
+If you find this layout distracting while you write, you can turn off Hang Punctuation at Line Ends in Settings.  
+This update also adds the song command, a command-line tool for Plainsong. To learn more, choose Command Line Tool from the Plainsong menu.
+
 ## 1.4.0
 
 原稿用紙をイメージしたマス目や、ノートのような罫線を表示して文章を書けるようになりました。設定の「ガイド」にて表示を切り替えられます。  
