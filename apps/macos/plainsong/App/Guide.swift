@@ -19,12 +19,10 @@ extension EditorSettings {
         guide == .manuscriptPaper
     }
 
-    /// 原稿用紙のマスと罫線は一定の行送りに揃えるので、段落の間隔を空けない
     var usesParagraphSpacing: Bool {
         addsParagraphSpacing && guide == .blank
     }
 
-    /// 原稿用紙では字をマスに揃えるので、カーニングを切り替えられない
     func allowsToggling(_ keyPath: KeyPath<EditorSettings, Bool>) -> Bool {
         keyPath != \.usesKerning || !showsManuscriptGuide
     }

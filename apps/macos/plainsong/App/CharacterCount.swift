@@ -34,7 +34,6 @@ struct CharacterCountOptions: Equatable {
         let capacity = range.length * 3
         let text = String(unsafeUninitializedCapacity: capacity) { buffer in
             var used = 0
-            // 対になっていないサロゲートは、置き換えて1文字として数える
             string.getBytes(
                 buffer.baseAddress,
                 maxLength: capacity,
@@ -59,7 +58,6 @@ struct CharacterCountOptions: Equatable {
     private func excludes(_ character: Character) -> Bool {
         let scalars = character.unicodeScalars
         guard let first = scalars.first else { return false }
-        // 空白に結合文字が続くと、空白ではない1文字になる
         switch first.value {
         case 0x20: return !includesSpaces && scalars.count == 1
         case 0x3000: return !includesIdeographicSpaces && scalars.count == 1

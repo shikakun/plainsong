@@ -90,7 +90,6 @@ final class EditorToolbar: NSObject, NSToolbarDelegate, NSSharingServicePickerTo
         }
     }
 
-    /// 全文を消すときも⌘Zで取り消せるよう、キー入力と同じ手順で書き換える
     @objc private func deleteText(_: Any?) {
         guard let textView else { return }
         textView.discardMarkedTextIfNeeded()

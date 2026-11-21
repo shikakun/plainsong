@@ -1,6 +1,5 @@
 import Foundation
 
-/// 枚数と印刷は400字詰めで数え、画面だけ1行のマス数を変えられる
 nonisolated struct ManuscriptPaper: Equatable {
     struct Line: Equatable {
         /// 改行も含めた、UTF-16での長さ
@@ -135,7 +134,6 @@ nonisolated struct ManuscriptPaper: Equatable {
         return LineBreakRules.isParagraphBreak(string.character(at: location - 1))
     }
 
-    /// U+2028は段落を分けずに行を変えるので、そのあとの行は字下げしない
     private func indent(ofContents contents: NSRange, in string: NSString) -> Int {
         guard indent > 0, contents.length > 0, isParagraphStart(contents.location, in: string),
               ParagraphIndentRules.indents(paragraphStartingWith: string.character(at: contents.location))
@@ -143,8 +141,6 @@ nonisolated struct ManuscriptPaper: Equatable {
         return indent
     }
 
-    /// 縦中横の2桁は、組方向によらず1マスに入れる
-    /// 行は語の途中からも始まる。2026の後半の26は2桁ではない
     private static func units(of contents: NSRange, in string: NSString) -> [Unit] {
         let startsInsideToken = contents.location > 0
             && UprightGlyphs.isHalfWidthGraphic(string.character(at: contents.location - 1))

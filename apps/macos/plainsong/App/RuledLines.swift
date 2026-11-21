@@ -1,7 +1,6 @@
 import AppKit
 
 enum RuledLines {
-    /// 1行目の前には引かない
     static func positions(
         betweenLinesAt middles: [CGFloat],
         pitch: CGFloat,

@@ -13,7 +13,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     /// didFinishLaunchingまで待つより、ウィンドウが約20ms速く表示される
-    /// 起動したら、すべての下書きのウィンドウ、復元したウィンドウ、Finderから開いたファイルを開く
     func applicationWillFinishLaunching(_: Notification) {
         NSWindow.allowsAutomaticWindowTabbing = false
         let settings = settingsModel.settings
@@ -32,13 +31,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         false
     }
 
-    /// ログイン時に起動したときは、ユーザーがPlainsongを開く操作をするまでウィンドウを開かない
     func applicationDidFinishLaunching(_: Notification) {
         guard defersWindow, !LoginItem.wasLaunchedAtLogin else { return }
         showDrafts()
     }
 
-    /// 閉じた下書きはファイルに残っているので、本文のウィンドウがひとつも出ていなければ開き直す
     func applicationShouldHandleReopen(_: NSApplication, hasVisibleWindows _: Bool) -> Bool {
         showEditors()
         return false
@@ -54,7 +51,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         let controller = settingsWindowController
             ?? SettingsWindowController(model: settingsModel, relaunch: { [weak self] in self?.relaunch() })
         settingsWindowController = controller
-        // メニューバーのアイコンのメニューから開くときは、アプリをアクティブにする
         NSApp.activate()
         controller.showWindow(nil)
     }

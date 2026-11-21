@@ -118,12 +118,12 @@ final nonisolated class LineHeightSegmentLayoutManager: NSTextLayoutManager {
     }
 }
 
-/// 和文の始め括弧か空白で始まる段落と、Markdownの見出しやリストなどの行は、1行目を下げずに組む。組むときの段落だけを差し替え、本文の属性は書き換えない
+/// 組むときの段落だけを差し替え、本文の属性は書き換えない
 /// 状態を持たないので、どのウィンドウも1つを使い回す。コンテンツストレージはデリゲートを弱参照で持つが、共有のインスタンスなので解放されない
 final nonisolated class ParagraphIndentRules: NSObject, NSTextContentStorageDelegate, Sendable {
     static let shared = ParagraphIndentRules()
 
-    /// JLREQの始め括弧類から、欧文の括弧と引用符を除いたもの。欧文の段落は、引用符で始まっても下げる
+    /// JLREQの始め括弧類から、欧文の括弧と引用符を除いたもの
     private static let openingBrackets = Set("「『（〔［｛〈《【〘〖〝｟⦅".utf16)
 
     /// 空白で始まる段落は、自分で字下げしたものとして二重に下げない

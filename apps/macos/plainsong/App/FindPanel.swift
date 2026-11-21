@@ -50,12 +50,11 @@ final class FindPanel: NSPanel, NSToolbarDelegate {
             backing: .buffered,
             defer: true
         )
-        // タイトルは画面に出さないが、VoiceOverの読み上げとウインドウメニューに使われる
         title = String(localized: "find.panel.title")
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
         isReleasedWhenClosed = false
-        // NSPanelにするのは、メインウインドウにならないから。それ以外は通常のウインドウと同じに扱う
+        // NSPanelにするのは、メインウインドウにならないから
         isFloatingPanel = false
         hidesOnDeactivate = false
         isExcludedFromWindowsMenu = false

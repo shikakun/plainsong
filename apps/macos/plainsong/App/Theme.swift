@@ -1,6 +1,5 @@
 import AppKit
 
-/// ファイルにないキーと読めない値はnilにし、そのキーだけデフォルトの色を使う
 struct Theme {
     var background: NSColor?
     var foreground: NSColor?
@@ -9,7 +8,6 @@ struct Theme {
     var selectionForeground: NSColor?
     var palette: [Int: NSColor] = [:]
 
-    /// Ghosttyの設定ファイルと同じく、同じキーは後の行を使い、空の値はそれまでの指定を取り消す
     init(ghosttyConfig text: String) {
         for line in text.split(whereSeparator: \.isNewline) {
             let line = line.trimmingCharacters(in: .whitespaces)
@@ -54,7 +52,6 @@ struct Theme {
         return NSAppearance(named: luminance > 0.184 ? .aqua : .darkAqua)
     }
 
-    /// Ghosttyが受け付ける16進数の書き方（`#`は省略可、6桁か3桁）だけを読む。X11の色名は読まない
     private static func color(_ value: String) -> NSColor? {
         var digits = Substring(value)
         if digits.count >= 2, digits.hasPrefix("\""), digits.hasSuffix("\"") {

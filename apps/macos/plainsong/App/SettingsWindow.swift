@@ -1,6 +1,5 @@
 import AppKit
 
-/// 設定ウィンドウ
 final class SettingsWindowController: NSWindowController {
     private static let frameName = "Settings"
 
@@ -31,7 +30,7 @@ final class SettingsWindowController: NSWindowController {
         (contentViewController as? SettingsTabViewController)?.updateWindowTitle()
     }
 
-    /// ⎋キーと⌘.で閉じる。キー入力を受けるビューがないと、ウィンドウはcancelOperation(_:)ではなくcancel:を送る
+    /// キー入力を受けるビューがないと、ウィンドウはcancelOperation(_:)ではなくcancel:を送る
     @objc func cancel(_: Any?) {
         close()
     }
@@ -42,7 +41,6 @@ final class SettingsWindowController: NSWindowController {
         return item
     }
 
-    /// 大きさはペインの内容で決まるので、保存した位置だけを使う
     private static func restorePosition(of window: NSWindow) {
         let size = window.frame.size
         if window.setFrameUsingName(frameName) {
@@ -292,7 +290,7 @@ final class SettingsSheetController: NSWindowController {
         }
     }
 
-    /// ⎋キーと⌘.で閉じる。キー入力を受けるビューがないと、ウィンドウはcancelOperation(_:)ではなくcancel:を送る
+    /// キー入力を受けるビューがないと、ウィンドウはcancelOperation(_:)ではなくcancel:を送る
     @objc func cancel(_: Any?) {
         guard let window, let parent = window.sheetParent else { return }
         parent.endSheet(window)

@@ -1,6 +1,5 @@
 import Foundation
 
-/// CommonMarkより緩く読む。複数の行をまとめて読むのは、コードブロックと先頭のフロントマターだけ
 /// 正規表現に渡すたびに`String`へ変換するので、変換のたびに全文をコピーする`NSMutableString`ではなく、不変の`NSString`を渡す
 nonisolated enum MarkdownSyntax {
     enum Flavor {

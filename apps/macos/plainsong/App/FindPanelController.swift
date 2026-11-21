@@ -31,7 +31,6 @@ final class FindPanelController: NSObject, NSWindowDelegate, NSTextFieldDelegate
         }
     }
 
-    /// パネルを閉じていても、ほかのアプリで検索した語が検索用ペーストボードにあれば、次を検索できる
     var hasPattern: Bool {
         !search.pattern.isEmpty || FindPasteboard.hasString
     }
@@ -226,7 +225,6 @@ extension FindPanelController {
         panel.navigationControl.setEnabled(canGoForward, forSegment: 1)
         panel.findNextButton.isEnabled = canGoForward
         panel.replaceAllItem.isEnabled = !results.isEmpty
-        // 一致した箇所を選んでいないときは、置換せずに次の箇所を選ぶだけなので、次の箇所さえあれば押せるようにする
         panel.replaceAndFindButton.isEnabled = current != nil || canGoForward
         panel.matchesWidthButton.isEnabled = !search.usesRegularExpression
         panel.matchesWidthButton.state = search.usesRegularExpression || search.matchesWidth ? .on : .off
@@ -247,7 +245,7 @@ extension FindPanelController {
         resetFlow()
     }
 
-    /// 検索欄の入力が止まるのを待っている途中でReturnやボタンが押されたら、待たずにすぐ探し直す。探し直したときはtrueを返す
+    /// 探し直したときはtrueを返す
     @discardableResult
     private func syncPattern() -> Bool {
         guard let field = panel?.findField, field.stringValue != search.pattern else { return false }
@@ -281,7 +279,6 @@ extension FindPanelController {
         move(in: editor, backwards: sender.selectedSegment == 0)
     }
 
-    /// 入力が止まるのを待たずに探し直したときは、そこで選んだ箇所を次の箇所として扱い、さらに先へは進まない
     @objc private func findNextPressed(_: Any?) {
         guard let editor, !syncPattern() else { return }
         move(in: editor, backwards: false)
@@ -357,7 +354,6 @@ extension FindPanelController {
         replaceAll(nil)
     }
 
-    /// 置換の流れのなかですでに置換した箇所は、重ねて置換しない
     @objc private func replaceAll(_: Any?) {
         guard let editor else { return }
         syncPattern()

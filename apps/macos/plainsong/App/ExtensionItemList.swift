@@ -79,7 +79,7 @@ final class ExtensionItemList: NSObject, NSTableViewDataSource, NSTableViewDeleg
         return true
     }
 
-    /// 右クリックで開く。⌥⌘↑と⌥⌘↓は表が受け取るので、メニューに出すのはショートカットを知らせるため
+    /// ⌥⌘↑と⌥⌘↓は表が受け取るので、メニューに出すのはショートカットを知らせるため
     private func makeMoveMenu() -> NSMenu {
         let menu = NSMenu()
         for move in ExtensionItemMove.allCases {

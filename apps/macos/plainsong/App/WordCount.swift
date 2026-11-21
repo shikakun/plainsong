@@ -3,7 +3,7 @@ import NaturalLanguage
 
 enum WordCountMethod: String, CaseIterable {
     case allLanguages
-    /// Microsoft Wordと同じく、日本語と中国語は1文字を1単語とする。韓国語は単語のあいだに空白を入れるので、単語のまま数える
+    /// 韓国語は単語のあいだに空白を入れるので、単語のまま数える
     case japaneseAndChineseByCharacter
     case englishOnly
 

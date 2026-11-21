@@ -6,7 +6,6 @@ nonisolated struct FindNavigation {
     let selection: NSRange
     let stopsAtEdges: Bool
 
-    /// 選択範囲とぴったり重なる一致を、いま選んでいる箇所とみなす
     var current: Int? {
         ranges.firstIndex(of: selection)
     }
@@ -32,7 +31,6 @@ nonisolated struct FindNavigation {
     }
 }
 
-/// 1件ずつ置換していく流れ。始めた箇所まで一周するか、末尾で止まったところで終わる
 nonisolated struct ReplaceFlow {
     enum Step: Equatable {
         case select(Int)
@@ -43,11 +41,9 @@ nonisolated struct ReplaceFlow {
     private(set) var start: Int
     /// 末尾から先頭に戻り、始めた箇所より手前を探している途中か
     private(set) var wrapped = false
-    /// 置換した箇所。流れが続くあいだは一致から外し、下線を引いて示す
     private(set) var replaced: [NSRange] = []
     private(set) var replacedCount = 0
 
-    /// 置換したあとの文字列に検索語が含まれていても、置換した箇所に重なる一致は選び直さない
     func excludes(_ range: NSRange) -> Bool {
         replaced.contains { replaced in
             NSIntersectionRange(replaced, range).length > 0
@@ -60,7 +56,6 @@ nonisolated struct ReplaceFlow {
         replacedCount += ranges.count
     }
 
-    /// 流れが終わったあとも続けて置換するときは、置換した箇所を覚えたまま、その位置からもう一周する
     mutating func restart(at location: Int) {
         start = location
         wrapped = false
@@ -84,7 +79,6 @@ nonisolated struct ReplaceFlow {
         wrapped = !backwards
     }
 
-    /// 置換した箇所がさらに書き換えられたら、もう置換した文字を指していないので、記録から外す
     mutating func adjust(forEditIn editedRange: NSRange, changeInLength delta: Int) {
         let start = NSRange(location: start, length: 0)
         self.start = start.adjusted(forEditIn: editedRange, changeInLength: delta)?.location ?? NSMaxRange(editedRange)

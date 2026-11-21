@@ -13,7 +13,6 @@ extension EditorWindowController {
     }
 
     /// 取り消しとやり直しは、消した時点の属性ごと文字を戻すので、そのあとに設定を変えていたら、今の書式に直す
-    /// 属性の変更なので、TextStoreは記録せず、取り消しの履歴にも入らない
     /// 記法で変えたフォントと色は、戻った文字を`MarkdownHighlighter`が読み直して付け直すので、ここでは直さない
     private func normalizeFormatting() {
         // 変換中は、入力する文字の属性が設定の書式と異なることがある

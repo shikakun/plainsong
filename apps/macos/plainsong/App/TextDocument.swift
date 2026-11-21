@@ -42,7 +42,6 @@ final class TextDocument: NSDocument {
     }
 
     override func makeWindowControllers() {
-        // ⌘Nや複製で、名称未設定のまま作られた書類は、下書きにする
         if fileURL == nil, draftStore == nil {
             openDraft(DraftLibrary.app.create(with: pendingText))
         }
@@ -108,7 +107,6 @@ final class TextDocument: NSDocument {
         draftStore == nil && super.hasUnautosavedChanges
     }
 
-    /// 空の下書きは、ほかに下書きがあれば消す。最後の1つは、次に開くときのために残す
     override func close() {
         if let draftStore {
             if textStorage?.length == 0, DraftLibrary.app.ids().count > 1 {
@@ -167,7 +165,6 @@ final class TextDocument: NSDocument {
         savingOperation = saveOperation
         super.save(to: url, ofType: typeName, for: saveOperation) { [self] error in
             savingOperation = nil
-            // 入力が止まったときの自動保存では、保存できない文字のダイアログを出さずに見送り、⌘Sや閉じるときに尋ねる
             var error = error
             let isUnencodable = (error as NSError?)?.domain == Self.errorDomain
             if isUnencodable, saveOperation == .autosaveInPlaceOperation, autosavingIsImplicitlyCancellable {
@@ -194,7 +191,6 @@ final class TextDocument: NSDocument {
         }
     }
 
-    /// どの形式も中身は同じプレーンテキストなので、保存パネルに形式を選ぶメニューを出さない
     override var shouldRunSavePanelWithAccessoryView: Bool {
         false
     }
@@ -310,7 +306,7 @@ final class TextDocument: NSDocument {
         callback(delegate, didRecoverSelector, didRecover, contextInfo)
     }
 
-    /// クラウドのストレージなどは、中身を変えずに更新日時だけを変えることがある。中身が同じなら、更新日時を合わせるだけにする
+    /// クラウドのストレージなどは、中身を変えずに更新日時だけを変えることがある
     /// NSDocumentに任せると、自動保存がファイルに書き込む設定では読み直して取り消しの履歴を消し、そうでなければ保存するときに、ほかのアプリが変更したと警告する
     override nonisolated func presentedItemDidChange() {
         guard !adoptModificationDateIfContentsUnchanged() else { return }
