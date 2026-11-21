@@ -7,9 +7,8 @@ enum CommandLineTool {
         "\(linkDirectory)/\(name)"
     }
 
-    /// 初期状態のmacOSには/usr/local/binがないことがあるので作る。-fにして、アプリを移動したあとに実行し直しても失敗しないようにする
     static func installCommand(toolPath: String) -> String {
-        "sudo mkdir -p \(linkDirectory) && sudo ln -sf \(shellQuoted(toolPath)) \(linkPath) && \(name) --help"
+        "sudo mkdir -p \(linkDirectory) && sudo ln -si \(shellQuoted(toolPath)) \(linkPath) && \(name) --help"
     }
 
     static var uninstallCommand: String {
@@ -40,7 +39,6 @@ final class CommandLineToolWindowController: NSWindowController {
         self.init(window: window)
     }
 
-    /// ⎋キーと⌘.で閉じる。キー入力を受けるビューがないと、ウィンドウはcancelOperation(_:)ではなくcancel:を送る
     @objc func cancel(_: Any?) {
         close()
     }
@@ -76,7 +74,7 @@ private final class CommandLineToolViewController: NSViewController {
         texts.alignment = .leading
         texts.spacing = 4
 
-        let toolPath = Bundle.main.sharedSupportURL?.appending(path: "bin/\(CommandLineTool.name)").path ?? ""
+        let toolPath = Bundle.main.bundleURL.appending(path: "Contents/SharedSupport/bin/\(CommandLineTool.name)").path
         let install = section(
             title: String(localized: "commandLineTool.install"),
             command: CommandLineTool.installCommand(toolPath: toolPath)
