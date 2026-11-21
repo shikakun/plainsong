@@ -1,0 +1,73 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Usage: song [file ...]
+
+Launch Plainsong, or open files in Plainsong.
+Files that don't exist are created.
+
+Examples:
+  song              Launch Plainsong
+  song draft.txt    Open draft.txt
+
+Options:
+  -h, --help        Show this help
+  -v, --version     Show the version
+EOF
+}
+
+fail() {
+  echo "song: $1" >&2
+  exit "${2:-1}"
+}
+
+# /usr/local/binなどのリンクから呼ばれるので、たどった先のPlainsong.app/Contents/SharedSupport/bin/songからアプリを求める
+app=$(realpath "$0")
+app=${app%/Contents/SharedSupport/bin/*}
+
+parses_options=true
+for arg do
+  shift
+  if $parses_options; then
+    case $arg in
+      --)
+        parses_options=false
+        continue
+        ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      -v | --version)
+        echo "Plainsong $(plutil -extract CFBundleShortVersionString raw -o - "$app/Contents/Info.plist")"
+        exit 0
+        ;;
+      -*)
+        fail "unknown option: $arg
+Run 'song --help' for usage." 2
+        ;;
+    esac
+  fi
+  # openは-で始まる引数をオプションとして読むので、パスに見える形にする
+  case $arg in
+    -*) arg=./$arg ;;
+  esac
+  if [ -d "$arg" ]; then
+    fail "can't open a folder: $arg"
+  fi
+  if [ ! -d "$(dirname -- "$arg")" ]; then
+    fail "no such folder: $(dirname -- "$arg")"
+  fi
+  set -- "$@" "$arg"
+done
+
+# サンドボックスのアプリは、ユーザーが選んでいない場所にファイルを作れない。開く前に、ここで作っておく
+for file do
+  if [ ! -e "$file" ]; then
+    : >"$file"
+  fi
+done
+
+open -a "$app" "$@"
