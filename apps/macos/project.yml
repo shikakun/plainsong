@@ -90,6 +90,11 @@ targets:
       - path: plainsong/Resources/Themes
         type: folder
         buildPhase: resources
+      - path: cli/song
+        buildPhase:
+          copyFiles:
+            destination: sharedSupport
+            subpath: bin
     scheme:
       testTargets:
         - plainsongTests

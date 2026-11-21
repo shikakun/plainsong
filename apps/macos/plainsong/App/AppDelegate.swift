@@ -3,6 +3,7 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var menuBarIcon: MenuBarIcon?
     private var settingsWindowController: SettingsWindowController?
+    private var commandLineToolWindowController: CommandLineToolWindowController?
     /// 最初に作ったインスタンスが`NSDocumentController.shared`になるので、アプリの起動より前に作成
     private let documents = DocumentController()
     private var defersWindow = false
@@ -55,6 +56,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         settingsWindowController = controller
         // メニューバーのアイコンのメニューから開くときは、アプリをアクティブにする
         NSApp.activate()
+        controller.showWindow(nil)
+    }
+
+    @objc func showCommandLineTool(_: Any?) {
+        let controller = commandLineToolWindowController ?? CommandLineToolWindowController()
+        commandLineToolWindowController = controller
         controller.showWindow(nil)
     }
 
